@@ -81,6 +81,7 @@ class Agent:
             # if the agent reach time horizons.
             if episode_steps + 1 >= self._env._max_episode_steps:
                 masked_done = False
+                done = True
             else:
                 masked_done = done
 
@@ -132,9 +133,13 @@ class Agent:
             if self._test_env.is_metaworld:
                 success = 0.0
 
+            episode_steps = 0
             while (not done):
                 action = self._algo.exploit(state)
                 next_state, reward, done, info = self._test_env.step(action)
+                episode_steps += 1
+                if episode_steps + 1 >= self._env._max_episode_steps:
+                    done = True
                 episode_return += reward
                 state = next_state
 
