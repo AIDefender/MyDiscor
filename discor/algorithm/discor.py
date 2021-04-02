@@ -14,7 +14,7 @@ class DisCor(SAC):
                  policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003,
                  error_lr=0.0003, policy_hidden_units=[256, 256],
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
-                 tau_init=10.0, target_update_coef=0.005,
+                 tau_init=10.0, target_update_coef=0.005, lfiw=False,
                  log_interval=10, seed=0):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
@@ -48,6 +48,8 @@ class DisCor(SAC):
         self._tau2 = torch.tensor(
             tau_init, device=self._device, requires_grad=False)
 
+        self.lfiw = lfiw
+
     def update_target_networks(self):
         super().update_target_networks()
         soft_update(
@@ -56,10 +58,18 @@ class DisCor(SAC):
 
     def update_online_networks(self, batch, writer):
         self._learning_steps += 1
-        self.update_policy_and_entropy(batch, writer)
+        if self.lfiw:
+            slow_batch = batch['slow']
+            self.update_policy_and_entropy(slow_batch, writer)
+        else:
+            self.update_policy_and_entropy(batch, writer)
         self.update_q_functions_and_error_models(batch, writer)
 
     def update_q_functions_and_error_models(self, batch, writer):
+        if self.lfiw:
+            fast_batch = batch['fast']
+            batch = batch['slow']
+        
         states, actions, rewards, next_states, dones = batch
 
         # Calculate importance weights.

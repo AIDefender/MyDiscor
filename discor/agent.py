@@ -9,7 +9,7 @@ from discor.utils import RunningMeanStats
 class Agent:
 
     def __init__(self, env, test_env, algo, log_dir, device, num_steps=3000000,
-                 batch_size=256, memory_size=1000000,
+                 batch_size=256, memory_size=1000000, fast_memory_size=None,
                  update_interval=1, start_steps=10000, log_interval=10,
                  eval_interval=5000, num_eval_episodes=5, seed=0):
 
@@ -29,6 +29,17 @@ class Agent:
             state_shape=self._env.observation_space.shape,
             action_shape=self._env.action_space.shape,
             gamma=self._algo.gamma, nstep=self._algo.nstep)
+
+        if fast_memory_size != None:
+            assert hasattr(algo, "lfiw") and algo.lfiw == True
+            self.lfiw = True
+            self._fast_replay_buffer = ReplayBuffer(
+                memory_size=fast_memory_size,
+                state_shape=self._env.observation_space.shape,
+                action_shape=self._env.action_space.shape,
+                gamma=self._algo.gamma, nstep=self._algo.nstep)
+        else:
+            self.lfiw = False
 
         # Directory to log.
         self._log_dir = log_dir
@@ -88,6 +99,10 @@ class Agent:
             self._replay_buffer.append(
                 state, action, reward, next_state, masked_done,
                 episode_done=done)
+            if self.lfiw:
+                self._fast_replay_buffer.append(
+                state, action, reward, next_state, masked_done,
+                episode_done=done)
 
             self._steps += 1
             episode_steps += 1
@@ -99,7 +114,15 @@ class Agent:
                 if self._steps % self._update_interval == 0:
                     batch = self._replay_buffer.sample(
                         self._batch_size, self._device)
+                    if self.lfiw:
+                        fast_batch = self._fast_replay_buffer.sample(
+                            self._batch_size, self._device)
+                        batch = {
+                            "fast": fast_batch,
+                            "slow": batch,
+                        }
                     self._algo.update_online_networks(batch, self._writer)
+
 
                 # Update target networks.
                 self._algo.update_target_networks()
