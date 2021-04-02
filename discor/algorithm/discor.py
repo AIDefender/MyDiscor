@@ -107,7 +107,10 @@ class DisCor(SAC):
         imp_ws1, imp_ws2 = self.calc_importance_weights(next_states, dones)
 
         # Calculate and update prob_classifier
-        d_pi_iw, prob_loss = self.calc_update_d_pi_iw(states, actions, fast_states, fast_actions)
+        if self.lfiw:
+            d_pi_iw, prob_loss = self.calc_update_d_pi_iw(states, actions, fast_states, fast_actions)
+        else:
+            d_pi_iw = None
 
         # Update Q functions.
         curr_qs1, curr_qs2, target_qs = \
@@ -127,9 +130,10 @@ class DisCor(SAC):
             writer.add_scalar(
                 'loss/error', err_loss.detach().item(),
                 self._learning_steps)
-            writer.add_scalar(
-                'loss/prob_loss', prob_loss.detach().item(),
-                self._learning_steps)
+            if self.lfiw:
+                writer.add_scalar(
+                    'loss/prob_loss', prob_loss.detach().item(),
+                    self._learning_steps)
             writer.add_scalar(
                 'stats/tau1', self._tau1.item(), self._learning_steps)
             writer.add_scalar(
