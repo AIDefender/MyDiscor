@@ -1,6 +1,6 @@
 import gym
 from gym.envs.registration import register
-from metaworld.envs.mujoco.env_dict import ALL_ENVIRONMENTS
+from metaworld.envs.mujoco.env_dict import ALL_V1_ENVIRONMENTS
 
 gym.logger.set_level(40)
 
@@ -18,7 +18,7 @@ METAWORLD_TASKS = (
 for task in METAWORLD_TASKS:
     register(
         id=task,
-        entry_point=ALL_ENVIRONMENTS[task],
+        entry_point=ALL_V1_ENVIRONMENTS[task],
         max_episode_steps=150)
     assert_env(gym.make(task))
 
