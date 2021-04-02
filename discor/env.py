@@ -23,6 +23,7 @@ for task in METAWORLD_TASKS:
     assert_env(gym.make(task))
 
 
+
 def make_env(env_id):
     env = gym.make(env_id)
     setattr(env, 'is_metaworld', env_id in METAWORLD_TASKS)
