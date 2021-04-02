@@ -27,7 +27,7 @@ def run(args):
     # Specify the directory to log.
     time = datetime.now().strftime("%Y%m%d-%H%M")
     log_dir = os.path.join(
-        'logs', args.env_id, f'{args.algo}-seed{args.seed}-{time}')
+        'logs', args.env_id, f'{args.exp_name}-seed{args.seed}-{time}')
 
     if args.algo == 'discor':
         # Discor algorithm.
@@ -57,6 +57,7 @@ if __name__ == '__main__':
         '--config', type=str, default=os.path.join('config', 'metaworld.yaml'))
     parser.add_argument('--num_steps', type=int, required=False)
     parser.add_argument('--env_id', type=str, default='hammer-v1')
+    parser.add_argument('--exp_name', type=str, default='discor')
     parser.add_argument('--algo', choices=['sac', 'discor'], default='discor')
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--seed', type=int, default=0)
