@@ -189,3 +189,5 @@ class DisCor(SAC):
             os.path.join(save_dir, 'online_error_net.pth'))
         self._target_error_net.save(
             os.path.join(save_dir, 'target_error_net.pth'))
+        self._prob_classifier.save(
+            os.path.join(save_dir, 'prob_classifier.pth'))
