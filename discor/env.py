@@ -1,8 +1,6 @@
 import gym
 from gym.envs.registration import register
 from metaworld.envs.mujoco.env_dict import ALL_V1_ENVIRONMENTS
-import metaworld
-import random
 
 gym.logger.set_level(40)
 
@@ -14,8 +12,16 @@ def assert_env(env):
 
 
 METAWORLD_TASKS = (
-    'hammer-v2', 'stick-push-v2', 'push-wall-v2',
-    'stick-pull-v2', 'dial-turn-v2', 'peg-insert-side-v2')
+    'hammer-v1', 'stick-push-v1', 'push-wall-v1',
+    'stick-pull-v1', 'dial-turn-v1', 'peg-insert-side-v1')
+
+for task in METAWORLD_TASKS:
+    register(
+        id=task,
+        entry_point=ALL_V1_ENVIRONMENTS[task],
+        max_episode_steps=150)
+    assert_env(gym.make(task))
+
 
 def make_env(env_id):
     if env_id in METAWORLD_TASKS:
