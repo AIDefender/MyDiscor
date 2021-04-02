@@ -3,5 +3,3 @@ logs/
 __pycache__/
 *.log
 *.out
-**/rlkit/
-**/rlkit*/
