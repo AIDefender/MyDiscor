@@ -12,7 +12,7 @@ from .rlkit.torch.networks import FlattenMlp
 class DisCor(SAC):
 
     def __init__(self, state_dim, action_dim, device, gamma=0.99, nstep=1,
-                 policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003,
+                 policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003, simple_sac=False,
                  error_lr=0.0003, policy_hidden_units=[256, 256],
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
                  prob_hidden_units=[128, 128], prob_temperature=7.5,
@@ -59,6 +59,7 @@ class DisCor(SAC):
 
         self.lfiw = lfiw
         self.prob_temperature = prob_temperature
+        self.simple_sac = simple_sac
 
     def update_target_networks(self):
         super().update_target_networks()
@@ -104,7 +105,10 @@ class DisCor(SAC):
         states, actions, rewards, next_states, dones = batch
 
         # Calculate importance weights.
-        imp_ws1, imp_ws2 = self.calc_importance_weights(next_states, dones)
+        if not self.simple_sac:
+            imp_ws1, imp_ws2 = self.calc_importance_weights(next_states, dones)
+        else:
+            imp_ws1, imp_ws2 = None, None
 
         # Calculate and update prob_classifier
         if self.lfiw:
@@ -116,28 +120,30 @@ class DisCor(SAC):
         curr_qs1, curr_qs2, target_qs = \
             self.update_q_functions(batch, writer, imp_ws1, imp_ws2, d_pi_iw)
 
-        # Calculate current and target errors, as well as importance weights.
-        curr_errs1, curr_errs2 = self.calc_current_errors(states, actions)
-        target_errs1, target_errs2 = self.calc_target_errors(
-            next_states, dones, curr_qs1, curr_qs2, target_qs)
+        if not self.simple_sac:
+            # Calculate current and target errors, as well as importance weights.
+            curr_errs1, curr_errs2 = self.calc_current_errors(states, actions)
+            target_errs1, target_errs2 = self.calc_target_errors(
+                next_states, dones, curr_qs1, curr_qs2, target_qs)
 
-        # Update error models.
-        err_loss = self.calc_error_loss(
-            curr_errs1, curr_errs2, target_errs1, target_errs2)
-        update_params(self._error_optim, err_loss)
+            # Update error models.
+            err_loss = self.calc_error_loss(
+                curr_errs1, curr_errs2, target_errs1, target_errs2)
+            update_params(self._error_optim, err_loss)
         
         if self._learning_steps % self._log_interval == 0:
-            writer.add_scalar(
-                'loss/error', err_loss.detach().item(),
-                self._learning_steps)
+            if not self.simple_sac:
+                writer.add_scalar(
+                    'loss/error', err_loss.detach().item(),
+                    self._learning_steps)
+                writer.add_scalar(
+                    'stats/tau1', self._tau1.item(), self._learning_steps)
+                writer.add_scalar(
+                    'stats/tau2', self._tau2.item(), self._learning_steps)
             if self.lfiw:
                 writer.add_scalar(
                     'loss/prob_loss', prob_loss.detach().item(),
                     self._learning_steps)
-            writer.add_scalar(
-                'stats/tau1', self._tau1.item(), self._learning_steps)
-            writer.add_scalar(
-                'stats/tau2', self._tau2.item(), self._learning_steps)
 
     def calc_importance_weights(self, next_states, dones):
         with torch.no_grad():

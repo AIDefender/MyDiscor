@@ -175,7 +175,7 @@ class SAC(Algorithm):
                     imp_ws2=None, d_pi_iw=None):
         assert imp_ws1 is None or imp_ws1.shape == curr_qs1.shape
         assert imp_ws2 is None or imp_ws2.shape == curr_qs2.shape
-        assert d_pi_iw is None or d_pi_iw.shape == imp_ws1.shape == imp_ws2.shape
+        assert d_pi_iw is None or d_pi_iw.shape == curr_qs1.shape == curr_qs2.shape
         assert not target_qs.requires_grad
         assert curr_qs1.shape == target_qs.shape
 
