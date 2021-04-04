@@ -181,9 +181,12 @@ class SAC(Algorithm):
 
         # Q loss is mean squared TD errors with importance weights.
         if imp_ws1 is None:
-            q1_loss = torch.mean((curr_qs1 - target_qs).pow(2))
-            q2_loss = torch.mean((curr_qs2 - target_qs).pow(2))
-
+            if d_pi_iw is None:
+                q1_loss = torch.mean((curr_qs1 - target_qs).pow(2))
+                q2_loss = torch.mean((curr_qs2 - target_qs).pow(2))
+            else:
+                q1_loss = torch.mean((curr_qs1 - target_qs).pow(2) * d_pi_iw)
+                q2_loss = torch.mean((curr_qs2 - target_qs).pow(2) * d_pi_iw)
         else:
             if d_pi_iw is None:
                 q1_loss = torch.sum((curr_qs1 - target_qs).pow(2) * imp_ws1)
