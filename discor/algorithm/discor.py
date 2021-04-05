@@ -16,7 +16,7 @@ class DisCor(SAC):
                  error_lr=0.0003, policy_hidden_units=[256, 256],
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
                  prob_hidden_units=[128, 128], prob_temperature=7.5,
-                 tau_init=10.0, target_update_coef=0.005, lfiw=False,
+                 tau_init=10.0, target_update_coef=0.005, lfiw=False, tau_scale=1,
                  log_interval=10, seed=0):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
@@ -62,6 +62,7 @@ class DisCor(SAC):
             print("===========No tau!==========")
         else:
             self.no_tau = False
+        self.tau_scale = tau_scale
 
         self.lfiw = lfiw
         self.prob_temperature = prob_temperature
@@ -162,8 +163,8 @@ class DisCor(SAC):
             x1 = -(1.0 - dones) * self._gamma * next_errs1
             x2 = -(1.0 - dones) * self._gamma * next_errs2
         else:
-            x1 = -(1.0 - dones) * self._gamma * next_errs1 / self._tau1
-            x2 = -(1.0 - dones) * self._gamma * next_errs2 / self._tau2
+            x1 = -(1.0 - dones) * self._gamma * next_errs1 / (self._tau1 * self.tau_scale)
+            x2 = -(1.0 - dones) * self._gamma * next_errs2 / (self._tau2 * self.tau_scale)
 
 
         # Calculate self-normalized importance weights.

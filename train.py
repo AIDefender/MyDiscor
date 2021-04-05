@@ -34,7 +34,7 @@ def run(args):
         algo = DisCor(
             state_dim=env.observation_space.shape[0],
             action_dim=env.action_space.shape[0],
-            device=device, seed=args.seed,
+            device=device, seed=args.seed, tau_scale = args.tau_scale
             **config['SAC'], **config['DisCor'])
     elif args.algo == 'sac':
         # SAC algorithm.
@@ -61,5 +61,6 @@ if __name__ == '__main__':
     parser.add_argument('--algo', choices=['sac', 'discor'], default='discor')
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--tau_scale', type=float, default=1.0)
     args = parser.parse_args()
     run(args)
