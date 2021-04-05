@@ -60,6 +60,8 @@ class DisCor(SAC):
         if tau_init < 1e-6:
             self.no_tau = True
             print("===========No tau!==========")
+        else:
+            self.no_tau = False
 
         self.lfiw = lfiw
         self.prob_temperature = prob_temperature

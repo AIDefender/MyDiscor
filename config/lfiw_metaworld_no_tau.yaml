@@ -23,5 +23,5 @@ SAC:
 DisCor:
   error_lr: 0.0003
   error_hidden_units: [256, 256, 256, 256]
-  tau_init: 10.0
+  tau_init: 0.0
   lfiw: True
