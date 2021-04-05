@@ -57,6 +57,10 @@ class DisCor(SAC):
         self._tau2 = torch.tensor(
             tau_init, device=self._device, requires_grad=False)
 
+        if tau_init < 1e-6:
+            self.no_tau = True
+            print("===========No tau!==========")
+
         self.lfiw = lfiw
         self.prob_temperature = prob_temperature
         self.simple_sac = simple_sac
@@ -152,8 +156,13 @@ class DisCor(SAC):
                 self._target_error_net(next_states, next_actions)
 
         # Terms inside the exponent of importance weights.
-        x1 = -(1.0 - dones) * self._gamma * next_errs1 / self._tau1
-        x2 = -(1.0 - dones) * self._gamma * next_errs2 / self._tau2
+        if self.no_tau:
+            x1 = -(1.0 - dones) * self._gamma * next_errs1
+            x2 = -(1.0 - dones) * self._gamma * next_errs2
+        else:
+            x1 = -(1.0 - dones) * self._gamma * next_errs1 / self._tau1
+            x2 = -(1.0 - dones) * self._gamma * next_errs2 / self._tau2
+
 
         # Calculate self-normalized importance weights.
         imp_ws1 = F.softmax(x1, dim=0)
