@@ -7,6 +7,7 @@ import torch
 from discor.env import make_env
 from discor.algorithm import SAC, DisCor
 from discor.agent import Agent
+import gym
 
 
 def run(args):
@@ -29,10 +30,19 @@ def run(args):
     log_dir = os.path.join(
         'logs', args.env_id, f'{args.exp_name}-seed{args.seed}-{time}')
 
+    try:
+        state_dim = env.observation_space.shape[0]
+    except TypeError:
+        # gym-fetch env
+        env = gym.wrappers.FlattenObservation(env)
+        setattr(env, '_max_episode_steps', 150)
+        state_dim = env.observation_space.shape[0]
+        print("==========state dim: %d========"%state_dim)
+
     if args.algo == 'discor':
         # Discor algorithm.
         algo = DisCor(
-            state_dim=env.observation_space.shape[0],
+            state_dim=state_dim,
             action_dim=env.action_space.shape[0],
             device=device, seed=args.seed, tau_scale = args.tau_scale,
             **config['SAC'], **config['DisCor'])
