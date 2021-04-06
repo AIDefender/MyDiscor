@@ -34,8 +34,11 @@ def run(args):
         state_dim = env.observation_space.shape[0]
     except TypeError:
         # gym-fetch env
-        env = gym.wrappers.FlattenObservation(env)
+        env, test_env = gym.wrappers.FlattenObservation(env), gym.wrappers.FlattenObservation(test_env)
+        env.env.reward_type="dense"
+        test_env.env.reward_type="dense"
         setattr(env, '_max_episode_steps', 150)
+        setattr(test_env, '_max_episode_steps', 150)
         state_dim = env.observation_space.shape[0]
         print("==========state dim: %d========"%state_dim)
 
