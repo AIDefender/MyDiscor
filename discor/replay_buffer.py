@@ -135,3 +135,32 @@ class ReplayBuffer:
 
     def __len__(self):
         return self._n
+
+class TemporalNStepBuffer(NStepBuffer):
+
+    def __init__(self, gamma=0.99, nstep=3):
+
+        super().__init__(gamma, nstep)
+
+    def append(self, state, action, reward, step):
+        super().append(state, action, reward)
+        self._steps.append(step)
+
+    def get(self):
+        state, action, reward = super().get()
+        step = self._steps.popleft()
+        return state, action, reward, step
+
+    def reset(self):
+        super().reset()
+        self._steps = deque(maxlen=self._nstep)
+
+
+
+class TemporalPrioritizedReplayBuffer(ReplayBuffer):
+
+    def __init__(self, memory_size, state_shape, action_shape, gamma=0.99, nstep=1):
+
+        super().__init__(memory_size, state_shape, action_shape, gamma, nstep)
+
+    # def append(self, state, action, reward, next_state, done, episode_done=None):
