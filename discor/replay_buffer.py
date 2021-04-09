@@ -184,7 +184,8 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
         priority = np.array(priority)
         # print(batch_size)
         idxes = self._prior_sample_idxes(batch_size, priority)
-        # print(self._steps[idxes], priority[idxes])
+        # for i in idxes:
+        #     print(self._steps[i], priority[i])
 
         return self._sample_batch(idxes, batch_size, device)
 
@@ -200,12 +201,12 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
             self._steps[idxes], dtype=torch.int64, device=device)
         return *batch, steps
     
-    def get_temporal_priority(self, mean_err=1, temperature=3e3):
+    def get_temporal_priority(self, mean_err=1, temperature=3e4):
         assert isinstance(self._horizon, int), "Dynamic horizon unsupported!"
 
         g, h = self._gamma, self._horizon
-        priority = -mean_err * (g / (1 - g)) * (1 - g ** (h + 1 - self._steps[:self._n]))
-        priority /= np.sum(priority)
+        priority = -(g / (1 - g)) * (1 - g ** (h + 1 - self._steps[:self._n]))
+        priority /= (-np.sum(priority))
         priority = np.exp(priority * temperature)
         priority /= np.sum(priority)
         # priority[-1] = 1 - np.sum(priority[:-1])
