@@ -10,7 +10,7 @@ class Agent:
 
     def __init__(self, env, test_env, algo, log_dir, device, num_steps=3000000,
                  batch_size=256, memory_size=1000000, fast_memory_size=None,
-                 update_interval=1, start_steps=10000, log_interval=10, horizon=None,
+                 update_interval=1, start_steps=10000, log_interval=10, horizon=None, temperature=None,
                  eval_interval=5000, num_eval_episodes=5, seed=0):
 
         # Environment.
@@ -32,7 +32,7 @@ class Agent:
             state_shape=self._env.observation_space.shape,
             action_shape=self._env.action_space.shape,
             gamma=self._algo.gamma, nstep=self._algo.nstep,
-            horizon=horizon)
+            horizon=horizon, temperature=temperature)
 
         if fast_memory_size != None:
             assert hasattr(algo, "lfiw") and algo.lfiw == True
@@ -42,7 +42,7 @@ class Agent:
                 state_shape=self._env.observation_space.shape,
                 action_shape=self._env.action_space.shape,
                 gamma=self._algo.gamma, nstep=self._algo.nstep,
-                horizon=horizon)
+                horizon=horizon, temperature=temperature)
         else:
             self.lfiw = False
 

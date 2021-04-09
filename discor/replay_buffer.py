@@ -51,7 +51,7 @@ class NStepBuffer:
 class ReplayBuffer:
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99,
-                 nstep=1, horizon=None):
+                 nstep=1, horizon=None, temperature=None):
         assert isinstance(memory_size, int) and memory_size > 0
         assert isinstance(state_shape, tuple)
         assert isinstance(action_shape, tuple)
@@ -159,9 +159,10 @@ class TemporalNStepBuffer(NStepBuffer):
 class TemporalPrioritizedReplayBuffer(ReplayBuffer):
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99, nstep=1,
-                 horizon = 1000):
+                 horizon = 1000, temperature=None):
         super().__init__(memory_size, state_shape, action_shape, gamma, nstep)
         self._horizon = horizon
+        self._temperature = temperature
 
     def _reset(self):
         super()._reset()
@@ -201,13 +202,13 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
             self._steps[idxes], dtype=torch.int64, device=device)
         return *batch, steps
     
-    def get_temporal_priority(self, mean_err=1, temperature=3e4):
+    def get_temporal_priority(self, mean_err=1):
         assert isinstance(self._horizon, int), "Dynamic horizon unsupported!"
 
         g, h = self._gamma, self._horizon
         priority = -(g / (1 - g)) * (1 - g ** (h + 1 - self._steps[:self._n]))
         priority /= (-np.sum(priority))
-        priority = np.exp(priority * temperature)
+        priority = np.exp(priority * self._temperature)
         priority /= np.sum(priority)
         # priority[-1] = 1 - np.sum(priority[:-1])
 
