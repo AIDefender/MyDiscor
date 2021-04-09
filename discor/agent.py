@@ -2,7 +2,7 @@ import os
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
-from discor.replay_buffer import ReplayBuffer
+from discor.replay_buffer import ReplayBuffer, TemporalPrioritizedReplayBuffer
 from discor.utils import RunningMeanStats
 
 
@@ -10,7 +10,7 @@ class Agent:
 
     def __init__(self, env, test_env, algo, log_dir, device, num_steps=3000000,
                  batch_size=256, memory_size=1000000, fast_memory_size=None,
-                 update_interval=1, start_steps=10000, log_interval=10,
+                 update_interval=1, start_steps=10000, log_interval=10, horizon=None,
                  eval_interval=5000, num_eval_episodes=5, seed=0):
 
         # Environment.
@@ -23,21 +23,26 @@ class Agent:
         # Algorithm.
         self._algo = algo
 
+        self.tper = True if horizon else False
+
         # Replay buffer with n-step return.
-        self._replay_buffer = ReplayBuffer(
+        buffer = TemporalPrioritizedReplayBuffer if horizon else ReplayBuffer
+        self._replay_buffer = buffer(
             memory_size=memory_size,
             state_shape=self._env.observation_space.shape,
             action_shape=self._env.action_space.shape,
-            gamma=self._algo.gamma, nstep=self._algo.nstep)
+            gamma=self._algo.gamma, nstep=self._algo.nstep,
+            horizon=horizon)
 
         if fast_memory_size != None:
             assert hasattr(algo, "lfiw") and algo.lfiw == True
             self.lfiw = True
-            self._fast_replay_buffer = ReplayBuffer(
+            self._fast_replay_buffer = buffer(
                 memory_size=fast_memory_size,
                 state_shape=self._env.observation_space.shape,
                 action_shape=self._env.action_space.shape,
-                gamma=self._algo.gamma, nstep=self._algo.nstep)
+                gamma=self._algo.gamma, nstep=self._algo.nstep,
+                horizon=horizon)
         else:
             self.lfiw = False
 
@@ -97,11 +102,11 @@ class Agent:
                 masked_done = done
 
             self._replay_buffer.append(
-                state, action, reward, next_state, masked_done,
+                state, action, reward, next_state, masked_done, episode_steps,
                 episode_done=done)
             if self.lfiw:
                 self._fast_replay_buffer.append(
-                state, action, reward, next_state, masked_done,
+                state, action, reward, next_state, masked_done, episode_steps,
                 episode_done=done)
 
             self._steps += 1
@@ -112,15 +117,18 @@ class Agent:
             if self._steps >= self._start_steps:
                 # Update online networks.
                 if self._steps % self._update_interval == 0:
-                    batch = self._replay_buffer.sample(
+                    batch = {}
+                    uniform_batch = self._replay_buffer.sample(
                         self._batch_size, self._device)
+                    batch.update({"uniform": uniform_batch})
+                    if self.tper:
+                        prior_batch = self._replay_buffer.prior_sample(
+                            self._batch_size, self._device)
+                        batch.update({"prior": prior_batch})
                     if self.lfiw:
                         fast_batch = self._fast_replay_buffer.sample(
                             self._batch_size, self._device)
-                        batch = {
-                            "fast": fast_batch,
-                            "slow": batch,
-                        }
+                        batch.update({"fast": fast_batch})
                     self._algo.update_online_networks(batch, self._writer)
 
 

@@ -15,7 +15,7 @@ class DisCor(SAC):
                  policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003, simple_sac=False,
                  error_lr=0.0003, policy_hidden_units=[256, 256],
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
-                 prob_hidden_units=[128, 128], prob_temperature=7.5,
+                 prob_hidden_units=[128, 128], prob_temperature=7.5, horizon=None,
                  tau_init=10.0, target_update_coef=0.005, lfiw=False, tau_scale=1,
                  log_interval=10, seed=0):
         super().__init__(
@@ -66,7 +66,11 @@ class DisCor(SAC):
 
         self.lfiw = lfiw
         self.prob_temperature = prob_temperature
-        self.simple_sac = simple_sac
+        self.no_discor = simple_sac
+
+        self.tper = True if horizon else False
+        if self.tper:
+            assert self.no_discor, "Temporal PER is not compatible with discor"
 
     def update_target_networks(self):
         super().update_target_networks()
@@ -76,14 +80,10 @@ class DisCor(SAC):
 
     def update_online_networks(self, batch, writer):
         self._learning_steps += 1
-        if self.lfiw:
-            slow_batch = batch['slow']
-            self.update_policy_and_entropy(slow_batch, writer)
-        else:
-            self.update_policy_and_entropy(batch, writer)
+        self.update_policy_and_entropy(batch['uniform'], writer)
         self.update_q_functions_and_error_models(batch, writer)
 
-    def calc_update_d_pi_iw(self, slow_obs, slow_act, fast_obs, fast_act):
+    def calc_update_d_pi_iw(self, slow_obs, slow_act, fast_obs, fast_act, target_obs=None, target_act=None):
         slow_samples = torch.cat((slow_obs, slow_act), dim=1)
         fast_samples = torch.cat((fast_obs, fast_act), dim=1)
 
@@ -98,36 +98,48 @@ class DisCor(SAC):
 
         update_params(self._prob_optim, loss)
 
+        # In case we want to compute ratio on data different from what we train the network
+        if target_obs is None:
+            target_obs = slow_obs
+        if target_act is None:
+            target_act = slow_act
+        target_samples = torch.cat((target_obs, target_act), dim=1)
+        slow_preds = self._prob_classifier(target_samples)
+
         importance_weights = F.sigmoid(slow_preds/self.prob_temperature).detach()
         importance_weights = importance_weights / torch.sum(importance_weights)
 
         return importance_weights, loss
 
     def update_q_functions_and_error_models(self, batch, writer):
+        uniform_batch = batch["uniform"]
         if self.lfiw:
             fast_batch = batch['fast']
-            batch = batch['slow']
             fast_states, fast_actions, *_ = fast_batch
+        train_batch = batch["prior"] if self.tper else batch["uniform"]
         
-        states, actions, rewards, next_states, dones = batch
+        # transition to update Q net
+        states, actions, rewards, next_states, dones, *_ = train_batch
+        # s,a to update the weight of lfiw network
+        slow_states, slow_actions, *_ = uniform_batch
 
         # Calculate importance weights.
-        if not self.simple_sac:
+        if not self.no_discor:
             imp_ws1, imp_ws2 = self.calc_importance_weights(next_states, dones)
         else:
             imp_ws1, imp_ws2 = None, None
 
         # Calculate and update prob_classifier
         if self.lfiw:
-            d_pi_iw, prob_loss = self.calc_update_d_pi_iw(states, actions, fast_states, fast_actions)
+            d_pi_iw, prob_loss = self.calc_update_d_pi_iw(slow_states, slow_actions, fast_states, fast_actions, states, actions)
         else:
             d_pi_iw = None
 
         # Update Q functions.
         curr_qs1, curr_qs2, target_qs = \
-            self.update_q_functions(batch, writer, imp_ws1, imp_ws2, d_pi_iw)
+            self.update_q_functions(train_batch, writer, imp_ws1, imp_ws2, d_pi_iw)
 
-        if not self.simple_sac:
+        if not self.no_discor:
             # Calculate current and target errors, as well as importance weights.
             curr_errs1, curr_errs2 = self.calc_current_errors(states, actions)
             target_errs1, target_errs2 = self.calc_target_errors(
@@ -139,7 +151,7 @@ class DisCor(SAC):
             update_params(self._error_optim, err_loss)
         
         if self._learning_steps % self._log_interval == 0:
-            if not self.simple_sac:
+            if not self.no_discor:
                 writer.add_scalar(
                     'loss/error', err_loss.detach().item(),
                     self._learning_steps)

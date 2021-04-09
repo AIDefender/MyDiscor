@@ -42,12 +42,22 @@ def run(args):
         state_dim = env.observation_space.shape[0]
         print("==========state dim: %d========"%state_dim)
 
+    horizon = None
+    if args.TP:
+        if args.dyna_h:
+            raise NotImplementedError
+        else:
+            horizon = env._max_episode_steps
+
+        print("=========horizon:%d========="%horizon)
+
     if args.algo == 'discor':
         # Discor algorithm.
         algo = DisCor(
             state_dim=state_dim,
             action_dim=env.action_space.shape[0],
-            device=device, seed=args.seed, tau_scale = args.tau_scale,
+            device=device, seed=args.seed, 
+            tau_scale = args.tau_scale, horizon = horizon,
             **config['SAC'], **config['DisCor'])
     elif args.algo == 'sac':
         # SAC algorithm.
@@ -59,7 +69,7 @@ def run(args):
         raise Exception('You need to set "--algo sac" or "--algo discor".')
 
     agent = Agent(
-        env=env, test_env=test_env, algo=algo, log_dir=log_dir,
+        env=env, test_env=test_env, algo=algo, log_dir=log_dir, horizon=horizon,
         device=device, seed=args.seed, **config['Agent'])
     agent.run()
 
@@ -73,6 +83,8 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='discor')
     parser.add_argument('--algo', choices=['sac', 'discor'], default='discor')
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--TP', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
+    parser.add_argument('--dyna_h', action='store_true') # whether to determine horizon length dynamically
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--tau_scale', type=float, default=1.0)
     args = parser.parse_args()

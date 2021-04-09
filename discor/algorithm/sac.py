@@ -79,11 +79,12 @@ class SAC(Algorithm):
 
     def update_online_networks(self, batch, writer):
         self._learning_steps += 1
+        batch = batch["uniform"]
         self.update_policy_and_entropy(batch, writer)
         self.update_q_functions(batch, writer)
 
     def update_policy_and_entropy(self, batch, writer):
-        states, actions, rewards, next_states, dones = batch
+        states, actions, rewards, next_states, dones, *_ = batch
 
         # Update policy.
         policy_loss, entropies = self.calc_policy_loss(states)
@@ -132,7 +133,7 @@ class SAC(Algorithm):
         return entropy_loss
 
     def update_q_functions(self, batch, writer, imp_ws1=None, imp_ws2=None, d_pi_iw=None):
-        states, actions, rewards, next_states, dones = batch
+        states, actions, rewards, next_states, dones, *_ = batch
 
         # Calculate current and target Q values.
         curr_qs1, curr_qs2 = self.calc_current_qs(states, actions)

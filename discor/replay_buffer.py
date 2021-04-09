@@ -51,7 +51,7 @@ class NStepBuffer:
 class ReplayBuffer:
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99,
-                 nstep=1):
+                 nstep=1, horizon=None):
         assert isinstance(memory_size, int) and memory_size > 0
         assert isinstance(state_shape, tuple)
         assert isinstance(action_shape, tuple)
@@ -83,9 +83,7 @@ class ReplayBuffer:
         if self._nstep != 1:
             self._nstep_buffer = NStepBuffer(self._gamma, self._nstep)
 
-    def append(self, state, action, reward, next_state, done,
-               episode_done=None):
-
+    def append(self, state, action, reward, next_state, done, step=None, episode_done=None):
         if self._nstep != 1:
             self._nstep_buffer.append(state, action, reward)
 
@@ -99,9 +97,9 @@ class ReplayBuffer:
                     self._append(state, action, reward, next_state, done)
 
         else:
-            self._append(state, action, reward, next_state, done)
+            self._append(state, action, reward, next_state, done, step)
 
-    def _append(self, state, action, reward, next_state, done):
+    def _append(self, state, action, reward, next_state, done, step=None):
         self._states[self._p, ...] = state
         self._actions[self._p, ...] = action
         self._rewards[self._p, ...] = reward
@@ -169,11 +167,6 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
         super()._reset()
         self._steps = np.empty((self._memory_size, 1), dtype=np.int64)
 
-    def append(self, state, action, reward, next_state, done, step, episode_done=None):
-        if self._nstep != 1:
-            raise NotImplementedError
-        self._append(state, action, reward, next_state, done, step)
-
     def _append(self, state, action, reward, next_state, done, step):
         super()._append(state, action, reward, next_state, done)
         # We can compute mod on negative number
@@ -189,13 +182,15 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
         if not priority:
             priority = self.get_temporal_priority(mean_err)
         priority = np.array(priority)
+        # print(batch_size)
         idxes = self._prior_sample_idxes(batch_size, priority)
+        # print(self._steps[idxes], priority[idxes])
 
         return self._sample_batch(idxes, batch_size, device)
 
     def _prior_sample_idxes(self, batch_size, priority):
         assert batch_size <= self._n
-        assert priority.shape[0] == self._n
+        assert priority.shape[0] == self._n, "priority shape %d != transition count %d"%(priority.shape[0], self._n)
         priority = np.reshape(priority, -1)
         return np.random.choice(range(self._n), batch_size, replace=False, p=priority)
 
@@ -205,13 +200,15 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
             self._steps[idxes], dtype=torch.int64, device=device)
         return *batch, steps
     
-    def get_temporal_priority(self, mean_err=1):
+    def get_temporal_priority(self, mean_err=1, temperature=3e3):
         assert isinstance(self._horizon, int), "Dynamic horizon unsupported!"
 
         g, h = self._gamma, self._horizon
-        priority = np.exp(-mean_err * (g / (1 - g)) * (1 - g ** (h + 1 - self._steps)))
-        priority[:-1] /= np.sum(priority)
-        priority[-1] = 1 - np.sum(priority[:-1])
+        priority = -mean_err * (g / (1 - g)) * (1 - g ** (h + 1 - self._steps[:self._n]))
+        priority /= np.sum(priority)
+        priority = np.exp(priority * temperature)
+        priority /= np.sum(priority)
+        # priority[-1] = 1 - np.sum(priority[:-1])
 
         return priority
 
@@ -226,8 +223,8 @@ if __name__ == '__main__':
     # buffer.append(7, 1, 1, 8, 0, 6)
     # buffer.append(8, 1, 1, 9, 0, 7)
 
-    # data = buffer.sample(3)
-    # [print(i) for i in data]
+    data = buffer.sample(3)
+    [print(i) for i in data]
     # data = buffer.prior_sample
     data = buffer.prior_sample(3)
     [print(i) for i in data]
