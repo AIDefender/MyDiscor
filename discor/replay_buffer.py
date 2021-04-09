@@ -1,5 +1,6 @@
 from collections import deque
 import numpy as np
+from numpy.lib.arraysetops import isin
 import torch
 
 
@@ -159,8 +160,74 @@ class TemporalNStepBuffer(NStepBuffer):
 
 class TemporalPrioritizedReplayBuffer(ReplayBuffer):
 
-    def __init__(self, memory_size, state_shape, action_shape, gamma=0.99, nstep=1):
-
+    def __init__(self, memory_size, state_shape, action_shape, gamma=0.99, nstep=1,
+                 horizon = 1000):
         super().__init__(memory_size, state_shape, action_shape, gamma, nstep)
+        self._horizon = horizon
 
-    # def append(self, state, action, reward, next_state, done, episode_done=None):
+    def _reset(self):
+        super()._reset()
+        self._steps = np.empty((self._memory_size, 1), dtype=np.int64)
+
+    def append(self, state, action, reward, next_state, done, step, episode_done=None):
+        if self._nstep != 1:
+            raise NotImplementedError
+        self._append(state, action, reward, next_state, done, step)
+
+    def _append(self, state, action, reward, next_state, done, step):
+        super()._append(state, action, reward, next_state, done)
+        # We can compute mod on negative number
+        self._p = (self._p - 1) % self._memory_size 
+        self._steps[self._p, ...] = step
+        self._p = (self._p + 1) % self._memory_size
+
+    def prior_sample(self, batch_size, device=torch.device('cpu'),
+                     priority=None, mean_err=1):
+        # priority can be unnormalized
+        assert isinstance(batch_size, int) and batch_size > 0
+
+        if not priority:
+            priority = self.get_temporal_priority(mean_err)
+        priority = np.array(priority)
+        idxes = self._prior_sample_idxes(batch_size, priority)
+
+        return self._sample_batch(idxes, batch_size, device)
+
+    def _prior_sample_idxes(self, batch_size, priority):
+        assert batch_size <= self._n
+        assert priority.shape[0] == self._n
+        priority = np.reshape(priority, -1)
+        return np.random.choice(range(self._n), batch_size, replace=False, p=priority)
+
+    def _sample_batch(self, idxes, batch_size, device):
+        batch =  super()._sample_batch(idxes, batch_size, device)
+        steps = torch.tensor(
+            self._steps[idxes], dtype=torch.int64, device=device)
+        return *batch, steps
+    
+    def get_temporal_priority(self, mean_err=1):
+        assert isinstance(self._horizon, int), "Dynamic horizon unsupported!"
+
+        g, h = self._gamma, self._horizon
+        priority = np.exp(-mean_err * (g / (1 - g)) * (1 - g ** (h + 1 - self._steps)))
+        priority[:-1] /= np.sum(priority)
+        priority[-1] = 1 - np.sum(priority[:-1])
+
+        return priority
+
+if __name__ == '__main__':
+    buffer = TemporalPrioritizedReplayBuffer(5, (1,), (1,), horizon=5)
+    buffer.append(1, 1, 1, 2, 0, 0)
+    buffer.append(2, 1, 1, 3, 0, 1)
+    buffer.append(3, 1, 1, 4, 0, 2)
+    buffer.append(4, 1, 1, 5, 0, 3)
+    buffer.append(5, 1, 1, 6, 0, 4)
+    # buffer.append(6, 1, 1, 7, 0, 5)
+    # buffer.append(7, 1, 1, 8, 0, 6)
+    # buffer.append(8, 1, 1, 9, 0, 7)
+
+    # data = buffer.sample(3)
+    # [print(i) for i in data]
+    # data = buffer.prior_sample
+    data = buffer.prior_sample(3)
+    [print(i) for i in data]
