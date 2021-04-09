@@ -140,13 +140,13 @@ class SAC(Algorithm):
         target_qs = self.calc_target_qs(rewards, next_states, dones)
 
         # Update Q functions.
-        q_loss, mean_q1, mean_q2 = \
+        q_loss, mean_q1, mean_q2, unweighted_q_loss = \
             self.calc_q_loss(curr_qs1, curr_qs2, target_qs, imp_ws1, imp_ws2, d_pi_iw)
         update_params(self._q_optim, q_loss)
 
         if self._learning_steps % self._log_interval == 0:
             writer.add_scalar(
-                'loss/Q', q_loss.detach().item(),
+                'loss/Q', unweighted_q_loss.detach().item(),
                 self._learning_steps)
             writer.add_scalar(
                 'stats/mean_Q1', mean_q1, self._learning_steps)
@@ -200,7 +200,10 @@ class SAC(Algorithm):
         mean_q1 = curr_qs1.detach().mean().item()
         mean_q2 = curr_qs2.detach().mean().item()
 
-        return q1_loss + q2_loss, mean_q1, mean_q2
+        # for a fair comparison
+        unweighted_q_loss = torch.mean((curr_qs1 - target_qs).pow(2)) + torch.mean((curr_qs2 - target_qs).pow(2))
+
+        return q1_loss + q2_loss, mean_q1, mean_q2, unweighted_q_loss
 
     def save_models(self, save_dir):
         super().save_models(save_dir)
