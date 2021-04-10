@@ -163,6 +163,8 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
         super().__init__(memory_size, state_shape, action_shape, gamma, nstep)
         self._horizon = horizon
         self._temperature = temperature
+        self._gamma_powers = np.array([gamma ** (self._horizon + 1 - i) for i in range(self._horizon + 1)])
+        self._gamma_weight = self._gamma / (1 - self._gamma)
 
     def _reset(self):
         super()._reset()
@@ -185,8 +187,8 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
         priority = np.array(priority)
         # print(batch_size)
         idxes = self._prior_sample_idxes(batch_size, priority)
-        # for i in idxes:
-        #     print(self._steps[i], priority[i])
+        for i in idxes:
+            print(self._steps[i], priority[i])
 
         return self._sample_batch(idxes, batch_size, device)
 
@@ -205,28 +207,30 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
     def get_temporal_priority(self, mean_err=1):
         assert isinstance(self._horizon, int), "Dynamic horizon unsupported!"
 
-        g, h = self._gamma, self._horizon
-        priority = -(g / (1 - g)) * (1 - g ** (h + 1 - self._steps[:self._n]))
-        priority /= (-np.sum(priority))
-        priority = np.exp(priority * self._temperature)
+        priority = self._gamma_weight * (1 - self._gamma_powers[self._steps[:self._n]])
+        priority /= np.sum(priority)
+        priority = np.exp(-priority * self._temperature * mean_err)
         priority /= np.sum(priority)
         # priority[-1] = 1 - np.sum(priority[:-1])
 
         return priority
 
 if __name__ == '__main__':
-    buffer = TemporalPrioritizedReplayBuffer(5, (1,), (1,), horizon=5)
+    buffer = TemporalPrioritizedReplayBuffer(10, (1,), (1,), horizon=12, temperature=10)
     buffer.append(1, 1, 1, 2, 0, 0)
     buffer.append(2, 1, 1, 3, 0, 1)
     buffer.append(3, 1, 1, 4, 0, 2)
     buffer.append(4, 1, 1, 5, 0, 3)
     buffer.append(5, 1, 1, 6, 0, 4)
+    buffer.append(6, 1, 1, 7, 0, 5)
+    buffer.append(7, 1, 1, 8, 0, 6)
+    buffer.append(8, 1, 1, 9, 0, 7)
+    buffer.append(9, 1, 1, 10, 0, 8)
+    buffer.append(10, 1, 1, 11, 0, 9)
+    buffer.append(11, 1, 1, 12, 0, 10)
     # buffer.append(6, 1, 1, 7, 0, 5)
     # buffer.append(7, 1, 1, 8, 0, 6)
     # buffer.append(8, 1, 1, 9, 0, 7)
 
-    data = buffer.sample(3)
-    [print(i) for i in data]
     # data = buffer.prior_sample
-    data = buffer.prior_sample(3)
-    [print(i) for i in data]
+    data = buffer.prior_sample(7)
