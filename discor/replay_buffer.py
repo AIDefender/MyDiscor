@@ -2,6 +2,8 @@ from collections import deque
 import numpy as np
 from numpy.lib.arraysetops import isin
 import torch
+import cProfile
+import time
 
 
 class NStepBuffer:
@@ -187,8 +189,8 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
         priority = np.array(priority)
         # print(batch_size)
         idxes = self._prior_sample_idxes(batch_size, priority)
-        for i in idxes:
-            print(self._steps[i], priority[i])
+        # for i in idxes:
+        #     print(self._steps[i], priority[i])
 
         return self._sample_batch(idxes, batch_size, device)
 
@@ -214,9 +216,9 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
         # priority[-1] = 1 - np.sum(priority[:-1])
 
         return priority
-
-if __name__ == '__main__':
-    buffer = TemporalPrioritizedReplayBuffer(10, (1,), (1,), horizon=12, temperature=10)
+    
+def test_buffer():
+    buffer = TemporalPrioritizedReplayBuffer(1000000, (1,), (1,), horizon=12, temperature=10)
     buffer.append(1, 1, 1, 2, 0, 0)
     buffer.append(2, 1, 1, 3, 0, 1)
     buffer.append(3, 1, 1, 4, 0, 2)
@@ -227,10 +229,22 @@ if __name__ == '__main__':
     buffer.append(8, 1, 1, 9, 0, 7)
     buffer.append(9, 1, 1, 10, 0, 8)
     buffer.append(10, 1, 1, 11, 0, 9)
-    buffer.append(11, 1, 1, 12, 0, 10)
+    for _ in range(1000000):
+        buffer.append(11, 1, 1, 12, 0, 10)
     # buffer.append(6, 1, 1, 7, 0, 5)
     # buffer.append(7, 1, 1, 8, 0, 6)
     # buffer.append(8, 1, 1, 9, 0, 7)
 
     # data = buffer.prior_sample
-    data = buffer.prior_sample(7)
+    time1 = time.time()
+    for i in range(1):
+        data = buffer.prior_sample(128)
+    print(time.time() - time1)
+
+    time1 = time.time()
+    for i in range(1):
+        data = buffer.sample(128)
+    print(time.time() - time1)
+
+if __name__ == '__main__':
+    test_buffer()
