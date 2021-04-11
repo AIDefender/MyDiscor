@@ -172,8 +172,8 @@ class DisCor(SAC):
 
     def calc_tper_weights(self, steps):
         med = torch.median(steps)
-        one = torch.tensor(1., device=self._device, requires_grad=False)
-        zero = torch.tensor(0., device=self._device, requires_grad=False)
+        one = torch.tensor(0.7, device=self._device, requires_grad=False)
+        zero = torch.tensor(0.3, device=self._device, requires_grad=False)
             
         weight = torch.where(steps > med, one, zero)
         return weight
