@@ -169,8 +169,6 @@ class DisCor(SAC):
                 writer.add_scalar(
                     'loss/prob_loss', prob_loss.detach().item(),
                     self._learning_steps)
-        if self._learning_steps % (7 * self._log_interval) == 0:
-            print(weights[100,0])
 
     def calc_tper_weights(self, steps):
         med = torch.median(steps)
