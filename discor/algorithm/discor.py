@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import torch
 from torch.optim import Adam
 from torch.nn import functional as F
@@ -71,6 +72,7 @@ class DisCor(SAC):
         self.tper = True if horizon else False
         if self.tper:
             assert self.no_discor, "Temporal PER is not compatible with discor"
+        self.Qs = 2
 
     def update_target_networks(self):
         super().update_target_networks()
@@ -116,28 +118,33 @@ class DisCor(SAC):
         if self.lfiw:
             fast_batch = batch['fast']
             fast_states, fast_actions, *_ = fast_batch
-        train_batch = batch["prior"] if self.tper else batch["uniform"]
+        # train_batch = batch["prior"] if self.tper else batch["uniform"]
+        train_batch = batch["uniform"]
         
         # transition to update Q net
-        states, actions, rewards, next_states, dones, *_ = train_batch
+        states, actions, rewards, next_states, dones, steps = train_batch
         # s,a to update the weight of lfiw network
         slow_states, slow_actions, *_ = uniform_batch
 
         # Calculate importance weights.
+        batch_size = states.shape[0]
+        weights = torch.ones((batch_size, self.Qs)).to(device=self._device)
         if not self.no_discor:
-            imp_ws1, imp_ws2 = self.calc_importance_weights(next_states, dones)
-        else:
-            imp_ws1, imp_ws2 = None, None
-
+            discor_weights = self.calc_importance_weights(next_states, dones)
+            weights *= discor_weights
         # Calculate and update prob_classifier
         if self.lfiw:
-            d_pi_iw, prob_loss = self.calc_update_d_pi_iw(slow_states, slow_actions, fast_states, fast_actions, states, actions)
-        else:
-            d_pi_iw = None
+            lfiw_weights, prob_loss = self.calc_update_d_pi_iw(slow_states, slow_actions, fast_states, fast_actions, states, actions)
+            weights *= lfiw_weights
+        # Calculate weights for temporal priority
+        if self.tper:
+            tper_weights = self.calc_tper_weights(steps)
+            weights *= tper_weights
+        
 
         # Update Q functions.
         curr_qs1, curr_qs2, target_qs = \
-            self.update_q_functions(train_batch, writer, imp_ws1, imp_ws2, d_pi_iw)
+            self.update_q_functions(train_batch, writer, weights[:, 0].reshape(-1,1), weights[:, 1].reshape(-1,1), fast_batch)
 
         if not self.no_discor:
             # Calculate current and target errors, as well as importance weights.
@@ -151,6 +158,7 @@ class DisCor(SAC):
             update_params(self._error_optim, err_loss)
         
         if self._learning_steps % self._log_interval == 0:
+            # print(lfiw_weights[100])
             if not self.no_discor:
                 writer.add_scalar(
                     'loss/error', err_loss.detach().item(),
@@ -163,6 +171,14 @@ class DisCor(SAC):
                 writer.add_scalar(
                     'loss/prob_loss', prob_loss.detach().item(),
                     self._learning_steps)
+
+    def calc_tper_weights(self, steps):
+        med = torch.median(steps)
+        one = torch.tensor(1., device=self._device, requires_grad=False)
+        zero = torch.tensor(0., device=self._device, requires_grad=False)
+            
+        weight = torch.where(steps > med, one, zero)
+        return weight
 
     def calc_importance_weights(self, next_states, dones):
         with torch.no_grad():

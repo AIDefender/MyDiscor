@@ -64,6 +64,8 @@ class Agent:
         self._device = device
         self._num_steps = num_steps
         self._batch_size = batch_size
+        if self.tper:
+            self._batch_size *= 2 # sample twice and select the half with larger steps
         self._update_interval = update_interval
         self._start_steps = start_steps
         self._log_interval = log_interval
@@ -121,10 +123,10 @@ class Agent:
                     uniform_batch = self._replay_buffer.sample(
                         self._batch_size, self._device)
                     batch.update({"uniform": uniform_batch})
-                    if self.tper:
-                        prior_batch = self._replay_buffer.prior_sample(
-                            self._batch_size, self._device)
-                        batch.update({"prior": prior_batch})
+                    # if self.tper:
+                    #     prior_batch = self._replay_buffer.prior_sample(
+                    #         self._batch_size, self._device)
+                    #     batch.update({"prior": prior_batch})
                     if self.lfiw:
                         fast_batch = self._fast_replay_buffer.sample(
                             self._batch_size, self._device)

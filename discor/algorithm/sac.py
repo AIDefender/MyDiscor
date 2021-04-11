@@ -132,7 +132,7 @@ class SAC(Algorithm):
             self._log_alpha * (self._target_entropy - entropies))
         return entropy_loss
 
-    def update_q_functions(self, batch, writer, imp_ws1=None, imp_ws2=None, d_pi_iw=None):
+    def update_q_functions(self, batch, writer, imp_ws1=None, imp_ws2=None, fast_batch=None):
         states, actions, rewards, next_states, dones, *_ = batch
 
         # Calculate current and target Q values.
@@ -141,8 +141,10 @@ class SAC(Algorithm):
 
         # Update Q functions.
         q_loss, mean_q1, mean_q2, unweighted_q_loss = \
-            self.calc_q_loss(curr_qs1, curr_qs2, target_qs, imp_ws1, imp_ws2, d_pi_iw)
+            self.calc_q_loss(curr_qs1, curr_qs2, target_qs, imp_ws1, imp_ws2)
         update_params(self._q_optim, q_loss)
+
+        #TODO: compute Q loss for online batch
 
         if self._learning_steps % self._log_interval == 0:
             writer.add_scalar(
@@ -173,28 +175,19 @@ class SAC(Algorithm):
         return target_qs
 
     def calc_q_loss(self, curr_qs1, curr_qs2, target_qs, imp_ws1=None,
-                    imp_ws2=None, d_pi_iw=None):
+                    imp_ws2=None):
         assert imp_ws1 is None or imp_ws1.shape == curr_qs1.shape
         assert imp_ws2 is None or imp_ws2.shape == curr_qs2.shape
-        assert d_pi_iw is None or d_pi_iw.shape == curr_qs1.shape == curr_qs2.shape
         assert not target_qs.requires_grad
         assert curr_qs1.shape == target_qs.shape
 
         # Q loss is mean squared TD errors with importance weights.
         if imp_ws1 is None:
-            if d_pi_iw is None:
-                q1_loss = torch.mean((curr_qs1 - target_qs).pow(2))
-                q2_loss = torch.mean((curr_qs2 - target_qs).pow(2))
-            else:
-                q1_loss = torch.mean((curr_qs1 - target_qs).pow(2) * d_pi_iw)
-                q2_loss = torch.mean((curr_qs2 - target_qs).pow(2) * d_pi_iw)
+            q1_loss = torch.mean((curr_qs1 - target_qs).pow(2))
+            q2_loss = torch.mean((curr_qs2 - target_qs).pow(2))
         else:
-            if d_pi_iw is None:
-                q1_loss = torch.sum((curr_qs1 - target_qs).pow(2) * imp_ws1)
-                q2_loss = torch.sum((curr_qs2 - target_qs).pow(2) * imp_ws2)
-            else:
-                q1_loss = torch.sum((curr_qs1 - target_qs).pow(2) * imp_ws1 * d_pi_iw)
-                q2_loss = torch.sum((curr_qs2 - target_qs).pow(2) * imp_ws2 * d_pi_iw)
+            q1_loss = torch.mean((curr_qs1 - target_qs).pow(2) * imp_ws1)
+            q2_loss = torch.mean((curr_qs2 - target_qs).pow(2) * imp_ws2)
 
         # Mean Q values for logging.
         mean_q1 = curr_qs1.detach().mean().item()
