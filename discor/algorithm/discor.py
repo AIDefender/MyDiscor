@@ -140,7 +140,6 @@ class DisCor(SAC):
         if self.tper:
             tper_weights = self.calc_tper_weights(steps)
             weights *= tper_weights
-        
 
         # Update Q functions.
         curr_qs1, curr_qs2, target_qs = \
@@ -158,7 +157,6 @@ class DisCor(SAC):
             update_params(self._error_optim, err_loss)
         
         if self._learning_steps % self._log_interval == 0:
-            # print(lfiw_weights[100])
             if not self.no_discor:
                 writer.add_scalar(
                     'loss/error', err_loss.detach().item(),
@@ -171,6 +169,8 @@ class DisCor(SAC):
                 writer.add_scalar(
                     'loss/prob_loss', prob_loss.detach().item(),
                     self._learning_steps)
+        if self._learning_steps % (7 * self._log_interval) == 0:
+            print(weights[100,0])
 
     def calc_tper_weights(self, steps):
         med = torch.median(steps)
