@@ -36,8 +36,11 @@ class ContinuousGridEnv(gym.Env):
         done = 0
     return copy.deepcopy(self.agent_pos), reward, done, {}
 
-  def reset(self):
-    self.agent_pos = np.array([-self.size] * self.dimention)
+  def reset(self, *pos):
+    if pos:
+      self.agent_pos = np.array(pos)
+    else:
+      self.agent_pos = np.array([-self.size] * self.dimention)
     return copy.deepcopy(self.agent_pos)
 
 register(
@@ -48,6 +51,7 @@ register(
 
 if __name__ == '__main__':
     env = gym.make("ContinuousGrid-v0")
+    print(env.reset(3.1, -3.1))
     print(env.reset())
-    print(env.step((1,1)))
+    print(env.step((-1,-1)))
     print(env.step((10,10)))
