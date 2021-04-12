@@ -52,6 +52,34 @@ class StateActionFunction(BaseNetwork):
     def forward(self, x):
         return self.net(x)
 
+class DQNNet(BaseNetwork):
+
+    def __init__(self, state_dim, action_length, hidden_units=[256, 256]):
+        super().__init__()
+
+        self.net = create_linear_network(
+            input_dim=state_dim,
+            output_dim=action_length,
+            hidden_units=hidden_units
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+class TwinnedDQNNet(BaseNetwork):
+
+    def __init__(self, state_dim, action_length, hidden_units=[256, 256]):
+        super().__init__()
+
+        self.net1 = DQNNet(state_dim, action_length, hidden_units)
+        self.net2 = DQNNet(state_dim, action_length, hidden_units)
+
+    def forward(self, states):
+        assert states.dim() == 2
+
+        value1 = self.net1(states)
+        value2 = self.net2(states)
+        return value1, value2
 
 class TwinnedStateActionFunction(BaseNetwork):
 
