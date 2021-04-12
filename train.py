@@ -58,6 +58,7 @@ def run(args):
             action_dim=env.action_space.shape[0],
             device=device, seed=args.seed, 
             tau_scale = args.tau_scale, horizon = horizon,
+            hard_tper_weight=args.hard_weight,
             **config['SAC'], **config['DisCor'])
     elif args.algo == 'sac':
         # SAC algorithm.
@@ -87,6 +88,7 @@ if __name__ == '__main__':
     parser.add_argument('--dyna_h', action='store_true') # whether to determine horizon length dynamically
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--tau_scale', type=float, default=1.0)
+    parser.add_argument('--hard_weight', type=float, default=0.4)
     parser.add_argument('--tper_t', type=int, default=3e4)
     args = parser.parse_args()
     run(args)

@@ -18,6 +18,7 @@ class DisCor(SAC):
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
                  prob_hidden_units=[128, 128], prob_temperature=7.5, horizon=None,
                  tau_init=10.0, target_update_coef=0.005, lfiw=False, tau_scale=1,
+                 hard_tper_weight=0.4,
                  log_interval=10, seed=0):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
@@ -73,6 +74,7 @@ class DisCor(SAC):
         if self.tper:
             assert self.no_discor, "Temporal PER is not compatible with discor"
         self.Qs = 2
+        self.hard_tper_weight = hard_tper_weight
 
     def update_target_networks(self):
         super().update_target_networks()
@@ -171,9 +173,10 @@ class DisCor(SAC):
                     self._learning_steps)
 
     def calc_tper_weights(self, steps):
+        assert self.hard_tper_weight <= 0.5
         med = torch.median(steps)
-        one = torch.tensor(0.7, device=self._device, requires_grad=False)
-        zero = torch.tensor(0.3, device=self._device, requires_grad=False)
+        one = torch.tensor(1-self.hard_tper_weight, device=self._device, requires_grad=False)
+        zero = torch.tensor(self.hard_tper_weight, device=self._device, requires_grad=False)
             
         weight = torch.where(steps > med, one, zero)
         return weight
