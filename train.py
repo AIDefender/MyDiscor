@@ -5,10 +5,10 @@ from datetime import datetime
 import torch
 
 from discor.env import make_env
-from discor.algorithm import SAC, DisCor
+from discor.algorithm import SAC, DisCor, DQN
 from discor.agent import Agent
 import gym
-
+from discor.envs.continuous_grid import ContinuousGridEnv
 
 def run(args):
     with open(args.config) as f:
@@ -26,7 +26,7 @@ def run(args):
         "cuda" if args.cuda and torch.cuda.is_available() else "cpu")
 
     # Specify the directory to log.
-    time = datetime.now().strftime("%Y%m%d-%H%M")
+    time = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = os.path.join(
         'logs', args.env_id, f'{args.exp_name}-seed{args.seed}-{time}')
 
@@ -66,6 +66,10 @@ def run(args):
             state_dim=env.observation_space.shape[0],
             action_dim=env.action_space.shape[0],
             device=device, seed=args.seed, **config['SAC'])
+    # elif args.algo == 'dqn':
+    #     algo = DQN(
+    #         state_dim=env.observation_space.shape[0]
+    #     )
     else:
         raise Exception('You need to set "--algo sac" or "--algo discor".')
 
