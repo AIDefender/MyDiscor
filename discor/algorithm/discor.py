@@ -120,32 +120,37 @@ class DisCor(SAC):
         if self.lfiw:
             fast_batch = batch['fast']
             fast_states, fast_actions, *_ = fast_batch
+        else:
+            fast_batch = None
         # train_batch = batch["prior"] if self.tper else batch["uniform"]
         train_batch = batch["uniform"]
         
         # transition to update Q net
-        states, actions, rewards, next_states, dones, steps = train_batch
+        states, actions, rewards, next_states, dones, *others = train_batch
         # s,a to update the weight of lfiw network
         slow_states, slow_actions, *_ = uniform_batch
 
         # Calculate importance weights.
         batch_size = states.shape[0]
-        weights = torch.ones((batch_size, self.Qs)).to(device=self._device)
+        weights = torch.ones((self.Qs, batch_size)).to(device=self._device)
         if not self.no_discor:
             discor_weights = self.calc_importance_weights(next_states, dones)
-            weights *= discor_weights
+            # print(weights[0].shape, discor_weights[0].shape)
+            weights[0] *= discor_weights[0][0]
+            weights[1] *= discor_weights[1][0]
         # Calculate and update prob_classifier
         if self.lfiw:
             lfiw_weights, prob_loss = self.calc_update_d_pi_iw(slow_states, slow_actions, fast_states, fast_actions, states, actions)
             weights *= lfiw_weights
         # Calculate weights for temporal priority
         if self.tper:
+            steps = others[0]
             tper_weights = self.calc_tper_weights(steps)
             weights *= tper_weights
 
         # Update Q functions.
         curr_qs1, curr_qs2, target_qs = \
-            self.update_q_functions(train_batch, writer, weights[:, 0].reshape(-1,1), weights[:, 1].reshape(-1,1), fast_batch)
+            self.update_q_functions(train_batch, writer, weights[0].reshape(-1,1), weights[1].reshape(-1,1), fast_batch)
 
         if not self.no_discor:
             # Calculate current and target errors, as well as importance weights.
