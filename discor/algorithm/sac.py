@@ -1,4 +1,7 @@
+import copy
 import os
+import numpy as np
+from numpy.core.numeric import _move_axis_to_0
 import torch
 from torch.optim import Adam
 
@@ -11,7 +14,8 @@ from discor.utils import disable_gradients, soft_update, update_params, \
 class SAC(Algorithm):
 
     def __init__(self, state_dim, action_dim, device, gamma=0.99, nstep=1,
-                 policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003,
+                 policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003, env=None,
+                 eval_tper=False, log_dir=None,
                  policy_hidden_units=[256, 256], q_hidden_units=[256, 256],
                  target_update_coef=0.005, log_interval=10, seed=0):
         super().__init__(
@@ -54,6 +58,10 @@ class SAC(Algorithm):
         self._alpha_optim = Adam([self._log_alpha], lr=entropy_lr)
 
         self._target_update_coef = target_update_coef
+
+        self._env = env
+        self._eval_tper = eval_tper
+        self._log_dir = log_dir
 
     def explore(self, state):
         state = torch.tensor(
@@ -133,7 +141,7 @@ class SAC(Algorithm):
         return entropy_loss
 
     def update_q_functions(self, batch, writer, imp_ws1=None, imp_ws2=None, fast_batch=None):
-        states, actions, rewards, next_states, dones, *_ = batch
+        states, actions, rewards, next_states, dones, *others = batch
 
         # Calculate current and target Q values.
         curr_qs1, curr_qs2 = self.calc_current_qs(states, actions)
@@ -155,8 +163,49 @@ class SAC(Algorithm):
             writer.add_scalar(
                 'stats/mean_Q2', mean_q2, self._learning_steps)
 
+            if self._eval_tper and self._learning_steps % 500 == 0:
+                assert self._log_dir
+                steps = others[0]
+                Qpi, Qstar = self.get_real_Q(states, actions, steps)
+                assert curr_qs1.shape == Qpi.shape
+                assert Qpi.shape[0] == states.shape[0]
+                Qpi_loss = (curr_qs1 - Qpi) ** 2
+                np.savetxt(os.path.join(self._log_dir, "Qpi_loss_timestep%d.txt"%self._learning_steps), Qpi_loss.detach().cpu().numpy())
+                np.savetxt(os.path.join(self._log_dir, "step_timestep%d.txt"%self._learning_steps), steps.detach().cpu().numpy())
+
         # Return there values for DisCor algorithm.
         return curr_qs1.detach(), curr_qs2.detach(), target_qs
+    
+    def get_real_Q(self, states, actions, steps, eval_cnt = 20):
+        states = states.detach().cpu().numpy()
+        actions = actions.detach().cpu().numpy()
+        envs = [copy.deepcopy(self._env) for _ in range(states.shape[0])]
+        print("evaluate on %d samples"%states.shape[0])
+        all_Qpi = []
+        for _ in range(eval_cnt):
+            [env.reset(s) for (env, s) in zip(envs, states)]
+            cur_states = torch.tensor(states).squeeze().to(device=self._device)
+            this_Qpi = None
+            this_gamma = 1
+            for i in range(self._env._max_episode_steps - int(torch.min(steps))):
+                next_actions, *_ = self._policy_net(cur_states)
+                next_actions = next_actions.detach().cpu().numpy()
+                res = [env.step(a) for (env, a) in zip(envs, next_actions)]
+                res_col = list(zip(*res))
+                next_obs, rewards, dones, _ = res_col
+                if this_Qpi is not None:
+                    this_Qpi = this_Qpi + this_gamma * np.array(rewards)
+                else:
+                    this_Qpi = np.array(rewards)
+                cur_states = torch.tensor(next_obs, dtype=torch.float32).to(device=self._device)
+                print(cur_states)
+                this_gamma *= self._gamma
+                if sum(dones) == states.shape[0]:
+                    break
+            all_Qpi.append(this_Qpi)
+        Q_pi = torch.tensor(np.mean(all_Qpi, axis=0)).to(device=self._device).reshape(-1,1)
+
+        return Q_pi, None
 
     def calc_current_qs(self, states, actions):
         curr_qs1, curr_qs2 = self._online_q_net(states, actions)

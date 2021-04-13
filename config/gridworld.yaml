@@ -4,7 +4,7 @@ Agent:
   memory_size: 100000
   update_interval: 1
   start_steps: 0
-  log_interval: 1
+  log_interval: 10
   # no evaluation
   eval_interval: 5000000
   num_eval_episodes: 5

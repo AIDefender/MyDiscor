@@ -65,6 +65,9 @@ def run(args):
         algo = SAC(
             state_dim=env.observation_space.shape[0],
             action_dim=env.action_space.shape[0],
+            env = test_env, # for computing Q_pi
+            eval_tper = args.eval_tper,
+            log_dir = log_dir,
             device=device, seed=args.seed, **config['SAC'])
     # elif args.algo == 'dqn':
     #     algo = DQN(
@@ -88,6 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='discor')
     parser.add_argument('--algo', choices=['sac', 'discor'], default='discor')
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--eval_tper', action='store_true')
     parser.add_argument('--TP', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
     parser.add_argument('--dyna_h', action='store_true') # whether to determine horizon length dynamically
     parser.add_argument('--seed', type=int, default=0)
