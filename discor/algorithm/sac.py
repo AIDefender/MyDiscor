@@ -14,10 +14,10 @@ from discor.utils import disable_gradients, soft_update, update_params, \
 class SAC(Algorithm):
 
     def __init__(self, state_dim, action_dim, device, gamma=0.99, nstep=1,
-                 policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003, env=None,
-                 eval_tper=False, log_dir=None,
+                 policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003, 
                  policy_hidden_units=[256, 256], q_hidden_units=[256, 256],
-                 target_update_coef=0.005, log_interval=10, seed=0):
+                 target_update_coef=0.005, log_interval=10, seed=0, 
+                 env=None, eval_tper=False, log_dir=None):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, log_interval, seed)
 
