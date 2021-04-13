@@ -19,6 +19,8 @@ class ContinuousGridEnv(gym.Env):
     self._max_episode_steps = 100
 
   def step(self, action):
+    if self.done_condition():
+      return copy.deepcopy(self.agent_pos), 0, 1, {}
     if isinstance(action, list) or isinstance(action, tuple):
         action = np.array(action)
     assert isinstance(action, np.ndarray)
@@ -28,17 +30,23 @@ class ContinuousGridEnv(gym.Env):
     self.agent_pos = np.min(np.vstack((self.agent_pos, [self.size] * self.dimention)), axis = 0)
     self.agent_pos = np.max(np.vstack((self.agent_pos, [-self.size] * self.dimention)), axis = 0)
 
-    if ([self.size - 1] * self.dimention < self.agent_pos).all() and (self.agent_pos <= [self.size] * self.dimention).all():
+    if self.done_condition():
         reward = 1
         done = 1
+        self.done = 1
     else:
         reward = -1
         done = 0
     return copy.deepcopy(self.agent_pos), reward, done, {}
+  
+  def done_condition(self):
+    return ([self.size - 1] * self.dimention < self.agent_pos).all() and (self.agent_pos <= [self.size] * self.dimention).all()
 
-  def reset(self, *pos):
-    if pos:
-      self.agent_pos = np.array(pos)
+  def reset(self, pos=None):
+    if pos is not None:
+      pos = np.array(pos)
+      assert pos.shape[0] == 2, "%d"%pos.shape[0]
+      self.agent_pos = pos
     else:
       self.agent_pos = np.array([-self.size] * self.dimention)
     return copy.deepcopy(self.agent_pos)
@@ -51,7 +59,7 @@ register(
 
 if __name__ == '__main__':
     env = gym.make("ContinuousGrid-v0")
-    print(env.reset(3.1, -3.1))
+    print(env.reset((3.1, -3.1)))
     print(env.reset())
     print(env.step((-1,-1)))
     print(env.step((10,10)))
