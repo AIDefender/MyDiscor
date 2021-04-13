@@ -2,7 +2,7 @@ import os
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
-from discor.replay_buffer import ReplayBuffer, TemporalPrioritizedReplayBuffer
+from discor.replay_buffer import ReplayBuffer, TemporalPrioritizedReplayBuffer, BackTimeBuffer
 from discor.utils import RunningMeanStats
 
 
@@ -11,7 +11,7 @@ class Agent:
     def __init__(self, env, test_env, algo, log_dir, device, num_steps=3000000,
                  batch_size=256, memory_size=1000000, fast_memory_size=None,
                  update_interval=1, start_steps=10000, log_interval=10, horizon=None, temperature=None,
-                 eval_interval=5000, num_eval_episodes=5, seed=0):
+                 eval_interval=5000, num_eval_episodes=5, seed=0, use_backward_steps=False):
 
         # Environment.
         self._env = env
@@ -27,12 +27,15 @@ class Agent:
 
         # Replay buffer with n-step return.
         buffer = TemporalPrioritizedReplayBuffer if horizon else ReplayBuffer
+        if use_backward_steps:
+            buffer = BackTimeBuffer
         self._replay_buffer = buffer(
             memory_size=memory_size,
             state_shape=self._env.observation_space.shape,
             action_shape=self._env.action_space.shape,
             gamma=self._algo.gamma, nstep=self._algo.nstep,
-            horizon=horizon, temperature=temperature)
+            horizon=horizon, temperature=temperature,
+            backward=use_backward_steps)
 
         if fast_memory_size != None:
             assert hasattr(algo, "lfiw") and algo.lfiw == True

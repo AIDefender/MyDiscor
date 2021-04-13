@@ -198,7 +198,6 @@ class SAC(Algorithm):
                 else:
                     this_Qpi = np.array(rewards)
                 cur_states = torch.tensor(next_obs, dtype=torch.float32).to(device=self._device)
-                print(cur_states)
                 this_gamma *= self._gamma
                 if sum(dones) == states.shape[0]:
                     break

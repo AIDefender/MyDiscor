@@ -59,6 +59,7 @@ def run(args):
             device=device, seed=args.seed, 
             tau_scale = args.tau_scale, horizon = horizon,
             hard_tper_weight=args.hard_weight,
+            use_backward_timestep=args.bk_step,
             **config['SAC'], **config['DisCor'])
     elif args.algo == 'sac':
         # SAC algorithm.
@@ -78,7 +79,7 @@ def run(args):
 
     agent = Agent(
         env=env, test_env=test_env, algo=algo, log_dir=log_dir, horizon=horizon, temperature=args.tper_t,
-        device=device, seed=args.seed, **config['Agent'])
+        device=device, seed=args.seed, use_backward_steps=args.bk_step, **config['Agent'])
     agent.run()
 
 
@@ -92,6 +93,7 @@ if __name__ == '__main__':
     parser.add_argument('--algo', choices=['sac', 'discor'], default='discor')
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--eval_tper', action='store_true')
+    parser.add_argument('--bk_step', action='store_true')
     parser.add_argument('--TP', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
     parser.add_argument('--dyna_h', action='store_true') # whether to determine horizon length dynamically
     parser.add_argument('--seed', type=int, default=0)

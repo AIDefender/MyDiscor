@@ -18,7 +18,8 @@ class DisCor(SAC):
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
                  prob_hidden_units=[128, 128], prob_temperature=7.5, horizon=None,
                  tau_init=10.0, target_update_coef=0.005, lfiw=False, tau_scale=1,
-                 hard_tper_weight=0.4, log_interval=10, seed=0):
+                 hard_tper_weight=0.4, log_interval=10, seed=0,
+                 use_backward_timestep=False):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
             entropy_lr, policy_hidden_units, q_hidden_units,
@@ -74,6 +75,7 @@ class DisCor(SAC):
             assert self.no_discor, "Temporal PER is not compatible with discor"
         self.Qs = 2
         self.hard_tper_weight = hard_tper_weight
+        self.use_backward_timestep = use_backward_timestep
 
     def update_target_networks(self):
         super().update_target_networks()
@@ -184,8 +186,9 @@ class DisCor(SAC):
         med = torch.median(steps)
         one = torch.tensor(1-self.hard_tper_weight, device=self._device, requires_grad=False)
         zero = torch.tensor(self.hard_tper_weight, device=self._device, requires_grad=False)
+        cond = steps < med if self.use_backward_timestep else steps < med
             
-        weight = torch.where(steps > med, one, zero)
+        weight = torch.where(cond, one, zero)
         return weight
 
     def calc_importance_weights(self, next_states, dones):
