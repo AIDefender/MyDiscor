@@ -18,8 +18,7 @@ class DisCor(SAC):
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
                  prob_hidden_units=[128, 128], prob_temperature=7.5, horizon=None,
                  tau_init=10.0, target_update_coef=0.005, lfiw=False, tau_scale=1,
-                 hard_tper_weight=0.4,
-                 log_interval=10, seed=0):
+                 hard_tper_weight=0.4, log_interval=10, seed=0):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
             entropy_lr, policy_hidden_units, q_hidden_units,
@@ -132,25 +131,28 @@ class DisCor(SAC):
 
         # Calculate importance weights.
         batch_size = states.shape[0]
-        weights = torch.ones((self.Qs, batch_size)).to(device=self._device)
+        weights1 = torch.ones((batch_size, 1)).to(device=self._device)
+        weights2 = torch.ones((batch_size, 1)).to(device=self._device)
         if not self.no_discor:
             discor_weights = self.calc_importance_weights(next_states, dones)
             # print(weights[0].shape, discor_weights[0].shape)
-            weights[0] *= discor_weights[0][0]
-            weights[1] *= discor_weights[1][0]
+            weights1 *= discor_weights[0]
+            weights2 *= discor_weights[1]
         # Calculate and update prob_classifier
         if self.lfiw:
             lfiw_weights, prob_loss = self.calc_update_d_pi_iw(slow_states, slow_actions, fast_states, fast_actions, states, actions)
-            weights *= lfiw_weights
+            weights1 *= lfiw_weights
+            weights2 *= lfiw_weights
         # Calculate weights for temporal priority
         if self.tper:
             steps = others[0]
             tper_weights = self.calc_tper_weights(steps)
-            weights *= tper_weights
+            weights1 *= tper_weights
+            weights2 *= tper_weights
 
         # Update Q functions.
         curr_qs1, curr_qs2, target_qs = \
-            self.update_q_functions(train_batch, writer, weights[0].reshape(-1,1), weights[1].reshape(-1,1), fast_batch)
+            self.update_q_functions(train_batch, writer, weights1, weights2, fast_batch)
 
         if not self.no_discor:
             # Calculate current and target errors, as well as importance weights.
