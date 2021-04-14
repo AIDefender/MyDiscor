@@ -42,14 +42,8 @@ def run(args):
         state_dim = env.observation_space.shape[0]
         print("==========state dim: %d========"%state_dim)
 
-    horizon = None
-    if args.TP:
-        if args.dyna_h:
-            raise NotImplementedError
-        else:
-            horizon = env._max_episode_steps
-
-        print("=========horizon:%d========="%horizon)
+    horizon = env._max_episode_steps
+    print("=========horizon:%d========="%horizon)
 
     if args.algo == 'discor':
         # Discor algorithm.
@@ -57,9 +51,16 @@ def run(args):
             state_dim=state_dim,
             action_dim=env.action_space.shape[0],
             device=device, seed=args.seed, 
-            tau_scale = args.tau_scale, horizon = horizon,
+            tau_scale = args.tau_scale, 
+            discor=args.discor,
+            lfiw=args.lfiw,
+            tper=args.tper,
+            horizon = horizon,
             hard_tper_weight=args.hard_weight,
             use_backward_timestep=args.bk_step,
+            log_dir=log_dir,
+            env=test_env,
+            eval_tper = args.eval_tper,
             **config['SAC'], **config['DisCor'])
     elif args.algo == 'sac':
         # SAC algorithm.
@@ -92,9 +93,11 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='discor')
     parser.add_argument('--algo', choices=['sac', 'discor'], default='discor')
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--discor', action='store_true')
+    parser.add_argument('--lfiw', action='store_true')
+    parser.add_argument('--tper', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
     parser.add_argument('--eval_tper', action='store_true')
     parser.add_argument('--bk_step', action='store_true')
-    parser.add_argument('--TP', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
     parser.add_argument('--dyna_h', action='store_true') # whether to determine horizon length dynamically
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--tau_scale', type=float, default=1.0)

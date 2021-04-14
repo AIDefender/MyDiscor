@@ -13,75 +13,76 @@ from .rlkit.torch.networks import FlattenMlp
 class DisCor(SAC):
 
     def __init__(self, state_dim, action_dim, device, gamma=0.99, nstep=1,
-                 policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003, simple_sac=False,
+                 policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003,
                  error_lr=0.0003, policy_hidden_units=[256, 256],
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
                  prob_hidden_units=[128, 128], prob_temperature=7.5, horizon=None,
                  tau_init=10.0, target_update_coef=0.005, lfiw=False, tau_scale=1,
-                 hard_tper_weight=0.4, log_interval=10, seed=0,
+                 hard_tper_weight=0.4, log_interval=10, seed=0, discor=False, 
+                 tper=False, log_dir=None, env=None, eval_tper=False,
                  use_backward_timestep=False):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
             entropy_lr, policy_hidden_units, q_hidden_units,
-            target_update_coef, log_interval, seed)
+            target_update_coef, log_interval, seed, env, eval_tper, log_dir)
 
-        # Build error networks.
-        self._online_error_net = TwinnedStateActionFunction(
-            state_dim=state_dim,
-            action_dim=action_dim,
-            hidden_units=error_hidden_units
-            ).to(device=self._device)
-        self._target_error_net = TwinnedStateActionFunction(
-            state_dim=state_dim,
-            action_dim=action_dim,
-            hidden_units=error_hidden_units
-            ).to(device=self._device).eval()
-        self._prob_classifier = FlattenMlp(
-            input_size=state_dim+action_dim,
-            output_size=1,
-            hidden_sizes=prob_hidden_units,
-            ).to(device=self._device)
-
-        # Copy parameters of the learning network to the target network.
-        self._target_error_net.load_state_dict(
-            self._online_error_net.state_dict())
-
-        # Disable gradient calculations of the target network.
-        disable_gradients(self._target_error_net)
-
-        self._error_optim = Adam(
-            self._online_error_net.parameters(), lr=error_lr)
-        self._prob_optim = Adam(
-            self._prob_classifier.parameters(), lr=q_lr)
-
-        self._tau1 = torch.tensor(
-            tau_init, device=self._device, requires_grad=False)
-        self._tau2 = torch.tensor(
-            tau_init, device=self._device, requires_grad=False)
-
-        if tau_init < 1e-6:
-            self.no_tau = True
-            print("===========No tau!==========")
-        else:
-            self.no_tau = False
-        self.tau_scale = tau_scale
-
+        self.discor = discor
         self.lfiw = lfiw
-        self.prob_temperature = prob_temperature
-        self.no_discor = simple_sac
+        self.tper = tper
+        # Build error networks.
+        if self.discor:
+            self._online_error_net = TwinnedStateActionFunction(
+                state_dim=state_dim,
+                action_dim=action_dim,
+                hidden_units=error_hidden_units
+                ).to(device=self._device)
+            self._target_error_net = TwinnedStateActionFunction(
+                state_dim=state_dim,
+                action_dim=action_dim,
+                hidden_units=error_hidden_units
+                ).to(device=self._device).eval()
+            # Copy parameters of the learning network to the target network.
+            self._target_error_net.load_state_dict(
+                self._online_error_net.state_dict())
+            # Disable gradient calculations of the target network.
+            disable_gradients(self._target_error_net)
 
-        self.tper = True if horizon else False
+            self._error_optim = Adam(
+                self._online_error_net.parameters(), lr=error_lr)
+            self._tau1 = torch.tensor(
+                tau_init, device=self._device, requires_grad=False)
+            self._tau2 = torch.tensor(
+                tau_init, device=self._device, requires_grad=False)
+
+            if tau_init < 1e-6:
+                self.no_tau = True
+                print("===========No tau!==========")
+            else:
+                self.no_tau = False
+            self.tau_scale = tau_scale
+
+        if self.lfiw:
+            self._prob_classifier = FlattenMlp(
+                input_size=state_dim+action_dim,
+                output_size=1,
+                hidden_sizes=prob_hidden_units,
+                ).to(device=self._device)
+            self._prob_optim = Adam(
+                self._prob_classifier.parameters(), lr=q_lr)
+
         if self.tper:
-            assert self.no_discor, "Temporal PER is not compatible with discor"
+            self.hard_tper_weight = hard_tper_weight
+            self.use_backward_timestep = use_backward_timestep
+
+        # self.prob_temperature = prob_temperature
         self.Qs = 2
-        self.hard_tper_weight = hard_tper_weight
-        self.use_backward_timestep = use_backward_timestep
 
     def update_target_networks(self):
         super().update_target_networks()
-        soft_update(
-            self._target_error_net, self._online_error_net,
-            self._target_update_coef)
+        if self.discor:
+            soft_update(
+                self._target_error_net, self._online_error_net,
+                self._target_update_coef)
 
     def update_online_networks(self, batch, writer):
         self._learning_steps += 1
@@ -135,7 +136,7 @@ class DisCor(SAC):
         batch_size = states.shape[0]
         weights1 = torch.ones((batch_size, 1)).to(device=self._device)
         weights2 = torch.ones((batch_size, 1)).to(device=self._device)
-        if not self.no_discor:
+        if self.discor:
             discor_weights = self.calc_importance_weights(next_states, dones)
             # print(weights[0].shape, discor_weights[0].shape)
             weights1 *= discor_weights[0]
@@ -156,19 +157,18 @@ class DisCor(SAC):
         curr_qs1, curr_qs2, target_qs = \
             self.update_q_functions(train_batch, writer, weights1, weights2, fast_batch)
 
-        if not self.no_discor:
-            # Calculate current and target errors, as well as importance weights.
+        # Calculate current and target errors.
+        if self.discor:
             curr_errs1, curr_errs2 = self.calc_current_errors(states, actions)
             target_errs1, target_errs2 = self.calc_target_errors(
                 next_states, dones, curr_qs1, curr_qs2, target_qs)
-
             # Update error models.
             err_loss = self.calc_error_loss(
                 curr_errs1, curr_errs2, target_errs1, target_errs2)
             update_params(self._error_optim, err_loss)
         
         if self._learning_steps % self._log_interval == 0:
-            if not self.no_discor:
+            if self.discor:
                 writer.add_scalar(
                     'loss/error', err_loss.detach().item(),
                     self._learning_steps)
@@ -246,9 +246,11 @@ class DisCor(SAC):
 
     def save_models(self, save_dir):
         super().save_models(save_dir)
-        self._online_error_net.save(
-            os.path.join(save_dir, 'online_error_net.pth'))
-        self._target_error_net.save(
-            os.path.join(save_dir, 'target_error_net.pth'))
-        self._prob_classifier.save(
-            os.path.join(save_dir, 'prob_classifier.pth'))
+        if self.discor:
+            self._online_error_net.save(
+                os.path.join(save_dir, 'online_error_net.pth'))
+            self._target_error_net.save(
+                os.path.join(save_dir, 'target_error_net.pth'))
+        if self.lfiw:
+            self._prob_classifier.save(
+                os.path.join(save_dir, 'prob_classifier.pth'))
