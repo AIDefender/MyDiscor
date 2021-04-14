@@ -37,8 +37,9 @@ class Agent:
             horizon=horizon, temperature=temperature,
             backward=use_backward_steps)
 
-        if fast_memory_size != None:
-            assert hasattr(algo, "lfiw") and algo.lfiw == True
+        if hasattr(algo, "lfiw") and algo.lfiw:
+            if not fast_memory_size:
+                fast_memory_size = memory_size // 10
             self.lfiw = True
             self._fast_replay_buffer = buffer(
                 memory_size=fast_memory_size,

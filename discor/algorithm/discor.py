@@ -69,12 +69,12 @@ class DisCor(SAC):
                 ).to(device=self._device)
             self._prob_optim = Adam(
                 self._prob_classifier.parameters(), lr=q_lr)
+            self.prob_temperature = prob_temperature
 
         if self.tper:
             self.hard_tper_weight = hard_tper_weight
             self.use_backward_timestep = use_backward_timestep
 
-        # self.prob_temperature = prob_temperature
         self.Qs = 2
 
     def update_target_networks(self):
