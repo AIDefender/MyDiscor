@@ -49,41 +49,6 @@ class NStepBuffer:
     def __len__(self):
         return len(self._rewards)
 
-class BackwardStepBuffer(NStepBuffer):
-
-    def __init__(self, max_horizon):
-
-        self._max_horizon = max_horizon
-        self.cur_traj_step = 0
-        self.reset()
-
-    def append(self, state, action, reward, done, step, next_state):
-        self.cur_traj_step += 1
-        self._states.append(state)
-        self._actions.append(action)
-        self._rewards.append(reward)
-        self._dones.append(done)
-        self._steps.append(step)
-        self._next_states.append(next_state)
-
-    def get(self):
-        state = self._states.popleft()
-        action = self._actions.popleft()
-        reward = self._rewards.popleft()
-        done = self._dones.popleft()
-        step = self.cur_traj_step - self._steps.popleft()
-        next_state = self._next_states.popleft()
-
-        return state, action, reward, done, step, next_state
-
-    def reset(self):
-        self._states = deque(maxlen=self._max_horizon)
-        self._actions = deque(maxlen=self._max_horizon)
-        self._rewards = deque(maxlen=self._max_horizon)
-        self._dones = deque(maxlen=self._max_horizon)
-        self._steps = deque(maxlen=self._max_horizon)
-        self._next_states = deque(maxlen=self._max_horizon)
-
 
 class ReplayBuffer:
 
@@ -172,54 +137,15 @@ class ReplayBuffer:
     def __len__(self):
         return self._n
 
-class TemporalNStepBuffer(NStepBuffer):
-
-    def __init__(self, gamma=0.99, nstep=3):
-
-        super().__init__(gamma, nstep)
-
-    def append(self, state, action, reward, step):
-        super().append(state, action, reward)
-        self._steps.append(step)
-
-    def get(self):
-        state, action, reward = super().get()
-        step = self._steps.popleft()
-        return state, action, reward, step
-
-    def reset(self):
-        super().reset()
-        self._steps = deque(maxlen=self._nstep)
-
 class TemporalPrioritizedReplayBuffer(ReplayBuffer):
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99, nstep=1,
                  horizon = 1000, temperature=None, backward=False):
-        self._backward = backward
-        if backward:
-            self._bkstep_buffer = BackwardStepBuffer(max_horizon=horizon)
         super().__init__(memory_size, state_shape, action_shape, gamma, nstep)
-        self._horizon = horizon
-        self._temperature = temperature
-        self._gamma_powers = np.array([gamma ** (self._horizon + 1 - i) for i in range(self._horizon + 1)])
-        self._gamma_weight = self._gamma / (1 - self._gamma)
 
     def _reset(self):
         super()._reset()
         self._steps = np.empty((self._memory_size, 1), dtype=np.int64)
-        if self._backward:
-            self._bkstep_buffer.reset()
-
-    def append(self, state, action, reward, next_state, done, step=None, episode_done=None):
-        if self._backward:
-            self._bkstep_buffer.append(state, action, reward, done, step, next_state)
-            if done or episode_done or step >= self._horizon - 1:
-                while not self._bkstep_buffer.is_empty():
-                    s, a, r, d, ts, ns = self._bkstep_buffer.get()
-                    self._append(s, a, r, ns, d, ts)
-                self._bkstep_buffer.cur_traj_step = 0
-        else:
-            self._append(state, action, reward, next_state, done, step)
 
     def _append(self, state, action, reward, next_state, done, step):
         super()._append(state, action, reward, next_state, done)
@@ -228,55 +154,22 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
         self._steps[self._p, ...] = step
         self._p = (self._p + 1) % self._memory_size
 
-    def prior_sample(self, batch_size, device=torch.device('cpu'),
-                     priority=None, mean_err=1):
-        # priority can be unnormalized
-        assert isinstance(batch_size, int) and batch_size > 0
-
-        if not priority:
-            priority = self.get_temporal_priority(mean_err)
-        priority = np.array(priority)
-        # print(batch_size)
-        idxes = self._prior_sample_idxes(batch_size, priority)
-        # for i in idxes:
-        #     print(self._steps[i], priority[i])
-
-        return self._sample_batch(idxes, batch_size, device)
-
-    def _prior_sample_idxes(self, batch_size, priority):
-        assert batch_size <= self._n
-        assert priority.shape[0] == self._n, "priority shape %d != transition count %d"%(priority.shape[0], self._n)
-        priority = np.reshape(priority, -1)
-        return np.random.choice(range(self._n), batch_size, replace=False, p=priority)
-
     def _sample_batch(self, idxes, batch_size, device):
         batch =  super()._sample_batch(idxes, batch_size, device)
         steps = torch.tensor(
             self._steps[idxes], dtype=torch.int64, device=device)
         return *batch, steps
-    
-    def get_temporal_priority(self, mean_err=1):
-        assert isinstance(self._horizon, int), "Dynamic horizon unsupported!"
 
-        priority = self._gamma_weight * (1 - self._gamma_powers[self._steps[:self._n]])
-        priority /= np.sum(priority)
-        priority = np.exp(-priority * self._temperature * mean_err)
-        priority /= np.sum(priority)
-        # priority[-1] = 1 - np.sum(priority[:-1])
-
-        return priority
-
-class BackTimeBuffer(ReplayBuffer):
+class BackTimeBuffer(TemporalPrioritizedReplayBuffer):
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99,
                  horizon = 1000, **kwargs):
         super().__init__(memory_size, state_shape, action_shape, gamma, nstep=1)
         self._horizon = horizon
-        print("=using bktmbuffer")
+        print("Using bktmbuffer")
 
     def _reset(self):
         super()._reset()
-        self._steps = np.zeros((self._memory_size, 1), dtype=np.int64)
         self.cur_traj_step = 0
 
     def append(self, state, action, reward, next_state, done, step=None, episode_done=None):
@@ -290,19 +183,6 @@ class BackTimeBuffer(ReplayBuffer):
             self.cur_traj_step += 1
             if done or episode_done or step > self._horizon:
                 self.cur_traj_step = 0
-
-    def _append(self, state, action, reward, next_state, done, step):
-        super()._append(state, action, reward, next_state, done)
-        # We can compute mod on negative number
-        self._p = (self._p - 1) % self._memory_size 
-        self._steps[self._p, ...] = step
-        self._p = (self._p + 1) % self._memory_size
-
-    def _sample_batch(self, idxes, batch_size, device):
-        batch =  super()._sample_batch(idxes, batch_size, device)
-        steps = torch.tensor(
-            self._steps[idxes], dtype=torch.int64, device=device)
-        return *batch, steps
 
 def test_buffer():
     # for buffer in [TemporalPrioritizedReplayBuffer(100, (1,), (1,), horizon=12, backward=True), BackTimeBuffer(100, (1,), (1,), horizon=12)]:
@@ -319,12 +199,6 @@ def test_buffer():
     buffer.sample(128)
     print(time.time() - t1)
         # data = buffer.sample(15)
-    t1 = time.time()
-    buffer = TemporalPrioritizedReplayBuffer(10000, (1,), (1,), horizon=1000, temperature=3e3)
-    for i in range(300000):
-        buffer.append(i, 1, 1, i+1, 0, i % 1000, i==1000)
-    buffer.prior_sample(128)
-    print(time.time() - t1)
     t1 = time.time()
     buffer = ReplayBuffer(10000, (1,), (1,), horizon=1000, temperature=3e3)
     for i in range(300000):
