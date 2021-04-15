@@ -53,7 +53,7 @@ class NStepBuffer:
 class ReplayBuffer:
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99,
-                 nstep=1, horizon=None, temperature=None):
+                 nstep=1, arbi_reset=False, *args, **kwargs):
         assert isinstance(memory_size, int) and memory_size > 0
         assert isinstance(state_shape, tuple)
         assert isinstance(action_shape, tuple)
@@ -65,6 +65,8 @@ class ReplayBuffer:
         self._action_shape = action_shape
         self._gamma = gamma
         self._nstep = nstep
+        # If we need arbitrary reset, the output of env.sim.get_state() needs saving for further reset
+        self._arbi_reset = arbi_reset
 
         self._reset()
 
@@ -81,11 +83,13 @@ class ReplayBuffer:
 
         self._rewards = np.empty((self._memory_size, 1), dtype=np.float32)
         self._dones = np.empty((self._memory_size, 1), dtype=np.float32)
+        if self._arbi_reset:
+            self._sim_states = [None] * self._memory_size
 
         if self._nstep != 1:
             self._nstep_buffer = NStepBuffer(self._gamma, self._nstep)
 
-    def append(self, state, action, reward, next_state, done, step=None, episode_done=None):
+    def append(self, state, action, reward, next_state, done, step=None, episode_done=None, sim_state=None):
         if self._nstep != 1:
             self._nstep_buffer.append(state, action, reward)
 
@@ -99,14 +103,16 @@ class ReplayBuffer:
                     self._append(state, action, reward, next_state, done)
 
         else:
-            self._append(state, action, reward, next_state, done, step)
+            self._append(state, action, reward, next_state, done, step, sim_state)
 
-    def _append(self, state, action, reward, next_state, done, step=None):
+    def _append(self, state, action, reward, next_state, done, step=None, sim_state=None):
         self._states[self._p, ...] = state
         self._actions[self._p, ...] = action
         self._rewards[self._p, ...] = reward
         self._next_states[self._p, ...] = next_state
         self._dones[self._p, ...] = done
+        if self._arbi_reset:
+            self._sim_states[self._p] = sim_state
 
         self._n = min(self._n + 1, self._memory_size)
         self._p = (self._p + 1) % self._memory_size
@@ -131,8 +137,18 @@ class ReplayBuffer:
             self._dones[idxes], dtype=torch.float, device=device)
         next_states = torch.tensor(
             self._next_states[idxes], dtype=torch.float, device=device)
+        batch = {
+            'states': states,
+            'actions': actions,
+            'rewards': rewards,
+            'dones': dones,
+            'next_states': next_states
+        }
+        if self._arbi_reset:
+            sim_states = [self._sim_states[i] for i in idxes]
+            batch.update({'sim_states': sim_states})
 
-        return states, actions, rewards, next_states, dones
+        return batch
 
     def __len__(self):
         return self._n
@@ -140,31 +156,32 @@ class ReplayBuffer:
 class TemporalPrioritizedReplayBuffer(ReplayBuffer):
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99, nstep=1,
-                 horizon = 1000, temperature=None, backward=False):
-        super().__init__(memory_size, state_shape, action_shape, gamma, nstep)
+                 horizon = 1000, temperature=None, backward=False, arbi_reset=False):
+        super().__init__(memory_size, state_shape, action_shape, gamma, nstep, arbi_reset=arbi_reset)
 
     def _reset(self):
         super()._reset()
         self._steps = np.empty((self._memory_size, 1), dtype=np.int64)
 
-    def _append(self, state, action, reward, next_state, done, step):
-        super()._append(state, action, reward, next_state, done)
+    def _append(self, state, action, reward, next_state, done, step, sim_state):
+        super()._append(state, action, reward, next_state, done, step, sim_state)
         # We can compute mod on negative number
         self._p = (self._p - 1) % self._memory_size 
         self._steps[self._p, ...] = step
         self._p = (self._p + 1) % self._memory_size
 
     def _sample_batch(self, idxes, batch_size, device):
-        batch =  super()._sample_batch(idxes, batch_size, device)
+        batch = super()._sample_batch(idxes, batch_size, device)
         steps = torch.tensor(
             self._steps[idxes], dtype=torch.int64, device=device)
-        return *batch, steps
+        batch.update({"steps": steps})
+        return batch
 
 class BackTimeBuffer(TemporalPrioritizedReplayBuffer):
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99,
-                 horizon = 1000, **kwargs):
-        super().__init__(memory_size, state_shape, action_shape, gamma, nstep=1)
+                 horizon = 1000, arbi_reset=False, **kwargs):
+        super().__init__(memory_size, state_shape, action_shape, gamma, nstep=1, arbi_reset=arbi_reset)
         self._horizon = horizon
         print("Using bktmbuffer")
 
@@ -172,17 +189,17 @@ class BackTimeBuffer(TemporalPrioritizedReplayBuffer):
         super()._reset()
         self.cur_traj_step = 0
 
-    def append(self, state, action, reward, next_state, done, step=None, episode_done=None):
-            if self._p >= self.cur_traj_step:
-                self._steps[self._p-self.cur_traj_step:self._p] += 1
-            else:
-                # one part of the traj is at the end of the buffer and the other part is at the beginning
-                self._steps[self._p-self.cur_traj_step:] += 1
-                self._steps[:self._p] += 1
-            self._append(state, action, reward, next_state, done, 0)        
-            self.cur_traj_step += 1
-            if done or episode_done or step > self._horizon:
-                self.cur_traj_step = 0
+    def append(self, state, action, reward, next_state, done, step=None, episode_done=None, sim_state=None):
+        if self._p >= self.cur_traj_step:
+            self._steps[self._p-self.cur_traj_step:self._p] += 1
+        else:
+            # one part of the traj is at the end of the buffer and the other part is at the beginning
+            self._steps[self._p-self.cur_traj_step:] += 1
+            self._steps[:self._p] += 1
+        self._append(state, action, reward, next_state, done, 0, sim_state)        
+        self.cur_traj_step += 1
+        if done or episode_done or step > self._horizon:
+            self.cur_traj_step = 0
 
 def test_buffer():
     # for buffer in [TemporalPrioritizedReplayBuffer(100, (1,), (1,), horizon=12, backward=True), BackTimeBuffer(100, (1,), (1,), horizon=12)]:

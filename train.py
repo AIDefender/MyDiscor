@@ -81,6 +81,7 @@ def run(args):
     agent = Agent(
         env=env, test_env=test_env, algo=algo, log_dir=log_dir, horizon=horizon, temperature=args.tper_t,
         device=device, seed=args.seed, use_backward_steps=args.bk_step, save_model_interval=args.save_interval,
+        eval_tper=args.eval_tper,
          **config['Agent'])
     agent.run()
 
@@ -98,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--lfiw', action='store_true')
     parser.add_argument('--tper', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
     parser.add_argument('--eval_tper', action='store_true')
+    parser.add_argument('--eval_tper_interval', type=int, default=1e3)
     parser.add_argument('--bk_step', action='store_true')
     parser.add_argument('--dyna_h', action='store_true') # whether to determine horizon length dynamically
     parser.add_argument('--seed', type=int, default=0)

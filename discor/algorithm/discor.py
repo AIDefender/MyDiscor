@@ -128,9 +128,10 @@ class DisCor(SAC):
         train_batch = batch["uniform"]
         
         # transition to update Q net
-        states, actions, rewards, next_states, dones, *others = train_batch
+        states, actions, next_states, dones = \
+            train_batch["states"], train_batch["actions"], train_batch["next_states"], train_batch["dones"]
         # s,a to update the weight of lfiw network
-        slow_states, slow_actions, *_ = uniform_batch
+        slow_states, slow_actions = uniform_batch["states"], uniform_batch["actions"]
 
         # Calculate importance weights.
         batch_size = states.shape[0]
@@ -148,7 +149,7 @@ class DisCor(SAC):
             weights2 *= lfiw_weights
         # Calculate weights for temporal priority
         if self.tper:
-            steps = others[0]
+            steps = train_batch["steps"]
             tper_weights = self.calc_tper_weights(steps)
             weights1 *= tper_weights
             weights2 *= tper_weights

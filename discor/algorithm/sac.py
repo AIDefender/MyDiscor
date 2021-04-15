@@ -17,7 +17,7 @@ class SAC(Algorithm):
                  policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003, 
                  policy_hidden_units=[256, 256], q_hidden_units=[256, 256],
                  target_update_coef=0.005, log_interval=10, seed=0, 
-                 env=None, eval_tper=False, log_dir=None):
+                 env=None, eval_tper=False, log_dir=None, eval_tper_interval=5e4):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, log_interval, seed)
 
@@ -61,6 +61,7 @@ class SAC(Algorithm):
 
         self._env = env
         self._eval_tper = eval_tper
+        self._eval_tper_interval = eval_tper_interval
         self._log_dir = log_dir
 
     def explore(self, state):
@@ -92,7 +93,7 @@ class SAC(Algorithm):
         self.update_q_functions(batch, writer)
 
     def update_policy_and_entropy(self, batch, writer):
-        states, actions, rewards, next_states, dones, *_ = batch
+        states = batch["states"]
 
         # Update policy.
         policy_loss, entropies = self.calc_policy_loss(states)
@@ -141,7 +142,8 @@ class SAC(Algorithm):
         return entropy_loss
 
     def update_q_functions(self, batch, writer, imp_ws1=None, imp_ws2=None, fast_batch=None):
-        states, actions, rewards, next_states, dones, *others = batch
+        states, actions, rewards, next_states, dones = \
+            batch["states"], batch["actions"], batch["rewards"], batch["next_states"], batch["dones"]
 
         # Calculate current and target Q values.
         curr_qs1, curr_qs2 = self.calc_current_qs(states, actions)
@@ -163,10 +165,10 @@ class SAC(Algorithm):
             writer.add_scalar(
                 'stats/mean_Q2', mean_q2, self._learning_steps)
 
-            if self._eval_tper and self._learning_steps % 500 == 0:
+            if self._eval_tper and self._learning_steps % self._eval_tper_interval == 0:
                 assert self._log_dir
-                steps = others[0]
-                Qpi, Qstar = self.get_real_Q(states, actions, steps)
+                steps = batch["steps"]
+                Qpi, Qstar = self.get_real_Q(states[:128,...], actions[:128,...], steps[:128,...], batch["sim_states"][:128])
                 assert curr_qs1.shape == Qpi.shape
                 assert Qpi.shape[0] == states.shape[0]
                 Qpi_loss = (curr_qs1 - Qpi) ** 2
@@ -176,29 +178,47 @@ class SAC(Algorithm):
         # Return there values for DisCor algorithm.
         return curr_qs1.detach(), curr_qs2.detach(), target_qs
     
-    def get_real_Q(self, states, actions, steps, eval_cnt = 20):
+    def get_real_Q(self, states, actions, steps, sim_states, eval_cnt = 10):
+        batch_size = states.shape[0]
         states = states.detach().cpu().numpy()
         actions = actions.detach().cpu().numpy()
-        envs = [copy.deepcopy(self._env) for _ in range(states.shape[0])]
-        print("evaluate on %d samples"%states.shape[0])
+        envs = [copy.deepcopy(self._env) for _ in range(batch_size)]
+        print("Evaluating real Q loss on %d samples"%batch_size)
         all_Qpi = []
-        for _ in range(eval_cnt):
-            [env.reset(s) for (env, s) in zip(envs, states)]
+        for i in range(eval_cnt):
+            print("Evaluating: count %d"%i)
+            origin_obs = [env.reset() for env in envs]
+            [env.sim.set_state(s) for (env, s) in zip(envs, sim_states)]
+            dones = [False] * batch_size
             cur_states = torch.tensor(states).squeeze().to(device=self._device)
             this_Qpi = None
             this_gamma = 1
             for i in range(self._env._max_episode_steps - int(torch.min(steps))):
                 next_actions, *_ = self._policy_net(cur_states)
                 next_actions = next_actions.detach().cpu().numpy()
-                res = [env.step(a) for (env, a) in zip(envs, next_actions)]
-                res_col = list(zip(*res))
-                next_obs, rewards, dones, _ = res_col
+                # res = [env.step(a) for (env, a) in zip(envs, next_actions)]
+                next_obs = []
+                rewards = []
+                new_done = []
+                for index, (env, a) in enumerate(zip(envs, next_actions)):
+                    if dones[index]:
+                        rewards.append(0)
+                        next_obs.append(origin_obs[index]) # any obs is ok
+                        new_done.append(True)
+                    else:
+                        ns, reward, done, _ = env.step(a)
+                        rewards.append(reward)
+                        next_obs.append(ns)
+                        new_done.append(done)
+
                 if this_Qpi is not None:
                     this_Qpi = this_Qpi + this_gamma * np.array(rewards)
                 else:
                     this_Qpi = np.array(rewards)
                 cur_states = torch.tensor(next_obs, dtype=torch.float32).to(device=self._device)
+                dones = copy.deepcopy(new_done)
                 this_gamma *= self._gamma
+                print(sum(dones))
                 if sum(dones) == states.shape[0]:
                     break
             all_Qpi.append(this_Qpi)

@@ -13,7 +13,7 @@ class Agent:
                  batch_size=256, memory_size=1000000, fast_memory_size=None,
                  update_interval=1, start_steps=10000, log_interval=10, horizon=None, temperature=None,
                  eval_interval=5000, num_eval_episodes=5, seed=0, use_backward_steps=False,
-                 save_model_interval=0,
+                 save_model_interval=0, eval_tper=False,
                  ):
 
         # Environment.
@@ -38,7 +38,8 @@ class Agent:
             action_shape=self._env.action_space.shape,
             gamma=self._algo.gamma, nstep=self._algo.nstep,
             horizon=horizon, temperature=temperature,
-            backward=use_backward_steps)
+            backward=use_backward_steps,
+            arbi_reset=eval_tper)
 
         if hasattr(algo, "lfiw") and algo.lfiw:
             if not fast_memory_size:
@@ -80,6 +81,8 @@ class Agent:
         self._num_eval_episodes = num_eval_episodes
 
         self._save_model_interval = save_model_interval
+        self._eval_tper = eval_tper
+        
     def run(self):
         while True:
             self.train_episode()
@@ -101,6 +104,8 @@ class Agent:
             else:
                 action = self._algo.explore(state)
 
+            if self._eval_tper:
+                sim_state = self._env.sim.get_state()
             next_state, reward, done, _ = self._env.step(action)
 
             # Set done=True only when the agent fails, ignoring done signal
@@ -111,13 +116,13 @@ class Agent:
             else:
                 masked_done = done
 
-            self._replay_buffer.append(
-                state, action, reward, next_state, masked_done, episode_steps,
-                episode_done=done)
+            transition = [state, action, reward, next_state, masked_done, episode_steps, done]
+            if self._eval_tper:
+                transition.append(sim_state)
+
+            self._replay_buffer.append(*transition)
             if self.lfiw:
-                self._fast_replay_buffer.append(
-                state, action, reward, next_state, masked_done, episode_steps,
-                episode_done=done)
+                self._fast_replay_buffer.append(*transition)
 
             self._steps += 1
             episode_steps += 1
