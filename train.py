@@ -80,7 +80,8 @@ def run(args):
 
     agent = Agent(
         env=env, test_env=test_env, algo=algo, log_dir=log_dir, horizon=horizon, temperature=args.tper_t,
-        device=device, seed=args.seed, use_backward_steps=args.bk_step, **config['Agent'])
+        device=device, seed=args.seed, use_backward_steps=args.bk_step, save_model_interval=args.save_interval,
+         **config['Agent'])
     agent.run()
 
 
@@ -100,6 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('--bk_step', action='store_true')
     parser.add_argument('--dyna_h', action='store_true') # whether to determine horizon length dynamically
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--save_interval', type=int, default=0) # 0 means only saving last and best model
     parser.add_argument('--tau_scale', type=float, default=1.0)
     parser.add_argument('--hard_weight', type=float, default=0.4)
     parser.add_argument('--tper_t', type=int, default=3e4)

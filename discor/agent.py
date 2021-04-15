@@ -1,4 +1,5 @@
 import os
+from base import Algorithm
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
@@ -8,10 +9,12 @@ from discor.utils import RunningMeanStats
 
 class Agent:
 
-    def __init__(self, env, test_env, algo, log_dir, device, num_steps=3000000,
+    def __init__(self, env, test_env, algo: Algorithm, log_dir, device, num_steps=3000000,
                  batch_size=256, memory_size=1000000, fast_memory_size=None,
                  update_interval=1, start_steps=10000, log_interval=10, horizon=None, temperature=None,
-                 eval_interval=5000, num_eval_episodes=5, seed=0, use_backward_steps=False):
+                 eval_interval=5000, num_eval_episodes=5, seed=0, use_backward_steps=False,
+                 save_model_interval=0,
+                 ):
 
         # Environment.
         self._env = env
@@ -76,6 +79,7 @@ class Agent:
         self._eval_interval = eval_interval
         self._num_eval_episodes = num_eval_episodes
 
+        self._save_model_interval = save_model_interval
     def run(self):
         while True:
             self.train_episode()
@@ -144,8 +148,14 @@ class Agent:
                 # Evaluate.
                 if self._steps % self._eval_interval == 0:
                     self.evaluate()
-                    self._algo.save_models(
-                        os.path.join(self._model_dir, 'final'))
+                    if self._save_model_interval == 0:
+                        self._algo.save_models(
+                            os.path.join(self._model_dir, 'final'))
+                    else:
+                        if self._steps % self._save_model_interval == 0 and self._steps != 0:
+                            self._algo.save_models(
+                                os.path.join(self._model_dir, '%dk'%(self._steps // 1000)))
+
 
         # We log running mean of training rewards.
         self._train_return.append(episode_return)
