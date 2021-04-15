@@ -121,7 +121,7 @@ class DisCor(SAC):
         uniform_batch = batch["uniform"]
         if self.lfiw:
             fast_batch = batch['fast']
-            fast_states, fast_actions, *_ = fast_batch
+            fast_states, fast_actions = fast_batch['states'], fast_batch['actions']
         else:
             fast_batch = None
         # train_batch = batch["prior"] if self.tper else batch["uniform"]
