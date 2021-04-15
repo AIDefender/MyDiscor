@@ -169,9 +169,9 @@ class SAC(Algorithm):
                 assert self._log_dir
                 steps = batch["steps"]
                 Qpi, Qstar = self.get_real_Q(states[:128,...], actions[:128,...], steps[:128,...], batch["sim_states"][:128])
-                assert curr_qs1.shape == Qpi.shape
-                assert Qpi.shape[0] == states.shape[0]
-                Qpi_loss = (curr_qs1 - Qpi) ** 2
+                eval_qs1 = curr_qs1[:128, ...]
+                assert eval_qs1.shape == Qpi.shape
+                Qpi_loss = (eval_qs1 - Qpi) ** 2
                 np.savetxt(os.path.join(self._log_dir, "Qpi_loss_timestep%d.txt"%self._learning_steps), Qpi_loss.detach().cpu().numpy())
                 np.savetxt(os.path.join(self._log_dir, "step_timestep%d.txt"%self._learning_steps), steps.detach().cpu().numpy())
 
@@ -218,7 +218,6 @@ class SAC(Algorithm):
                 cur_states = torch.tensor(next_obs, dtype=torch.float32).to(device=self._device)
                 dones = copy.deepcopy(new_done)
                 this_gamma *= self._gamma
-                print(sum(dones))
                 if sum(dones) == states.shape[0]:
                     break
             all_Qpi.append(this_Qpi)
