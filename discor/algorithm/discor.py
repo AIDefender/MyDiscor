@@ -155,12 +155,15 @@ class DisCor(SAC):
             weights2 *= tper_weights
 
         # Update Q functions.
+        curr_errs1, curr_errs2 = None
+        if self.discor:
+            curr_errs1, curr_errs2 = self.calc_current_errors(states, actions)
+        # pass in curr_errs1 for evaluating discor
         curr_qs1, curr_qs2, target_qs = \
-            self.update_q_functions(train_batch, writer, weights1, weights2, fast_batch)
+            self.update_q_functions(train_batch, writer, weights1, weights2, fast_batch, curr_errs1)
 
         # Calculate current and target errors.
         if self.discor:
-            curr_errs1, curr_errs2 = self.calc_current_errors(states, actions)
             target_errs1, target_errs2 = self.calc_target_errors(
                 next_states, dones, curr_qs1, curr_qs2, target_qs)
             # Update error models.

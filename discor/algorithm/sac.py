@@ -1,7 +1,6 @@
 import copy
 import os
 import numpy as np
-from numpy.core.numeric import _move_axis_to_0
 import torch
 from torch.optim import Adam
 
@@ -142,7 +141,7 @@ class SAC(Algorithm):
             self._log_alpha * (self._target_entropy - entropies))
         return entropy_loss
 
-    def update_q_functions(self, batch, writer, imp_ws1=None, imp_ws2=None, fast_batch=None):
+    def update_q_functions(self, batch, writer, imp_ws1=None, imp_ws2=None, fast_batch=None, err_preds=None):
         states, actions, rewards, next_states, dones = \
             batch["states"], batch["actions"], batch["rewards"], batch["next_states"], batch["dones"]
 
@@ -166,19 +165,25 @@ class SAC(Algorithm):
             writer.add_scalar(
                 'stats/mean_Q2', mean_q2, self._learning_steps)
 
-            if self._eval_tper and self._learning_steps % self._eval_tper_interval == 0:
-                assert self._log_dir
-                steps = batch["steps"]
-                Qpi, Qstar = self.get_real_Q(states[:128,...], actions[:128,...], steps[:128,...], batch["sim_states"][:128])
-                eval_qs1 = curr_qs1[:128, ...]
-                assert eval_qs1.shape == Qpi.shape
-                Qpi_loss = (eval_qs1 - Qpi) ** 2
-                np.savetxt(os.path.join(self._stats_dir, "Qpi_loss_timestep%d.txt"%self._learning_steps), Qpi_loss.detach().cpu().numpy())
-                np.savetxt(os.path.join(self._stats_dir, "step_timestep%d.txt"%self._learning_steps), steps[:128].detach().cpu().numpy())
-                np.savetxt(os.path.join(self._stats_dir, "Q_value%d.txt"%self._learning_steps), eval_qs1.detach().cpu().numpy())
+        if self._eval_tper and self._learning_steps % self._eval_tper_interval == 0:
+            steps = batch["steps"]
+            sim_states = batch["sim_states"]
+            self.eval_Q(states[:128], actions[:128], steps[:128], sim_states[:128], curr_qs1[:128], err_preds[:128])
 
-        # Return there values for DisCor algorithm.
+        # Return their values for DisCor algorithm.
         return curr_qs1.detach(), curr_qs2.detach(), target_qs
+
+    def eval_Q(self, states, actions, steps, sim_states, curr_qs, err_preds=None):
+
+        Qpi = self.get_real_Q(states, actions, steps, sim_states)
+        assert curr_qs.shape == Qpi.shape
+        Qpi_loss = (curr_qs - Qpi) ** 2
+        np.savetxt(os.path.join(self._stats_dir, "Qpi_loss_timestep%d.txt"%self._learning_steps), Qpi_loss.detach().cpu().numpy())
+        np.savetxt(os.path.join(self._stats_dir, "step_timestep%d.txt"%self._learning_steps), steps.detach().cpu().numpy())
+        np.savetxt(os.path.join(self._stats_dir, "Qvalue_timestep%d.txt"%self._learning_steps), curr_qs.detach().cpu().numpy())
+        if err_preds is not None:
+            np.savetxt(os.path.join(self._stats_dir, "Error_pred_timestep%d.txt"%self._learning_steps), err_preds.detach().cpu().numpy())
+
     
     def get_real_Q(self, states, actions, steps, sim_states, eval_cnt = 10):
         batch_size = states.shape[0]
@@ -226,7 +231,7 @@ class SAC(Algorithm):
             all_Qpi.append(this_Qpi)
         Q_pi = torch.tensor(np.mean(all_Qpi, axis=0)).to(device=self._device).reshape(-1,1)
 
-        return Q_pi, None
+        return Q_pi
 
     def calc_current_qs(self, states, actions):
         curr_qs1, curr_qs2 = self._online_q_net(states, actions)
