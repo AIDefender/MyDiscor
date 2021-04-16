@@ -168,7 +168,7 @@ class SAC(Algorithm):
         if self._eval_tper and self._learning_steps % self._eval_tper_interval == 0:
             steps = batch["steps"]
             sim_states = batch["sim_states"]
-            self.eval_Q(states[:128], actions[:128], steps[:128], sim_states[:128], curr_qs1[:128], err_preds[:128])
+            self.eval_Q(states[:128], actions[:128], steps[:128], sim_states[:128], curr_qs1[:128], err_preds[:128] if err_preds else None)
 
         # Return their values for DisCor algorithm.
         return curr_qs1.detach(), curr_qs2.detach(), target_qs
