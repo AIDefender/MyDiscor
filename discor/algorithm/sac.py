@@ -194,7 +194,10 @@ class SAC(Algorithm):
             this_Qpi = None
             this_gamma = 1
             for i in range(self._env._max_episode_steps - int(torch.min(steps))):
-                next_actions, *_ = self._policy_net(cur_states)
+                if i == 0:
+                    next_actions = actions
+                else:
+                    next_actions, *_ = self._policy_net(cur_states)
                 next_actions = next_actions.detach().cpu().numpy()
                 # res = [env.step(a) for (env, a) in zip(envs, next_actions)]
                 next_obs = []
