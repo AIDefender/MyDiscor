@@ -63,6 +63,7 @@ class SAC(Algorithm):
         self._eval_tper = eval_tper
         self._eval_tper_interval = eval_tper_interval
         self._log_dir = log_dir
+        self._stats_dir = os.path.join(log_dir, "stats")
 
     def explore(self, state):
         state = torch.tensor(
@@ -172,16 +173,15 @@ class SAC(Algorithm):
                 eval_qs1 = curr_qs1[:128, ...]
                 assert eval_qs1.shape == Qpi.shape
                 Qpi_loss = (eval_qs1 - Qpi) ** 2
-                np.savetxt(os.path.join(self._log_dir, "Qpi_loss_timestep%d.txt"%self._learning_steps), Qpi_loss.detach().cpu().numpy())
-                np.savetxt(os.path.join(self._log_dir, "step_timestep%d.txt"%self._learning_steps), steps.detach().cpu().numpy())
+                np.savetxt(os.path.join(self._stats_dir, "Qpi_loss_timestep%d.txt"%self._learning_steps), Qpi_loss.detach().cpu().numpy())
+                np.savetxt(os.path.join(self._stats_dir, "step_timestep%d.txt"%self._learning_steps), steps[:128].detach().cpu().numpy())
+                np.savetxt(os.path.join(self._stats_dir, "Q_value%d.txt"%self._learning_steps), eval_qs1.detach().cpu().numpy())
 
         # Return there values for DisCor algorithm.
         return curr_qs1.detach(), curr_qs2.detach(), target_qs
     
     def get_real_Q(self, states, actions, steps, sim_states, eval_cnt = 10):
         batch_size = states.shape[0]
-        states = states.detach().cpu().numpy()
-        actions = actions.detach().cpu().numpy()
         envs = [copy.deepcopy(self._env) for _ in range(batch_size)]
         print("Evaluating real Q loss on %d samples"%batch_size)
         all_Qpi = []
@@ -190,7 +190,7 @@ class SAC(Algorithm):
             origin_obs = [env.reset() for env in envs]
             [env.sim.set_state(s) for (env, s) in zip(envs, sim_states)]
             dones = [False] * batch_size
-            cur_states = torch.tensor(states).squeeze().to(device=self._device)
+            cur_states = copy.deepcopy(states)
             this_Qpi = None
             this_gamma = 1
             for i in range(self._env._max_episode_steps - int(torch.min(steps))):

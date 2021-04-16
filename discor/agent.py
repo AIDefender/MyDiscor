@@ -58,10 +58,13 @@ class Agent:
         self._log_dir = log_dir
         self._model_dir = os.path.join(log_dir, 'model')
         self._summary_dir = os.path.join(log_dir, 'summary')
+        self._stats_dir = os.path.join(log_dir, 'stats')
         if not os.path.exists(self._model_dir):
             os.makedirs(self._model_dir)
         if not os.path.exists(self._summary_dir):
             os.makedirs(self._summary_dir)
+        if not os.path.exists(self._stats_dir):
+            os.makedirs(self._stats_dir)
 
         self._steps = 0
         self._episodes = 0
