@@ -177,8 +177,7 @@ class SAC(Algorithm):
 
         Qpi = self.get_real_Q(states, actions, steps, sim_states)
         assert curr_qs.shape == Qpi.shape
-        Qpi_loss = (curr_qs - Qpi) ** 2
-        np.savetxt(os.path.join(self._stats_dir, "Qpi_loss_timestep%d.txt"%self._learning_steps), Qpi_loss.detach().cpu().numpy())
+        np.savetxt(os.path.join(self._stats_dir, "Qpi_timestep%d.txt"%self._learning_steps), Qpi.detach().cpu().numpy())
         np.savetxt(os.path.join(self._stats_dir, "step_timestep%d.txt"%self._learning_steps), steps.detach().cpu().numpy())
         np.savetxt(os.path.join(self._stats_dir, "Qvalue_timestep%d.txt"%self._learning_steps), curr_qs.detach().cpu().numpy())
         if err_preds is not None:
