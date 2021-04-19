@@ -190,7 +190,7 @@ class DisCor(SAC):
         med = torch.median(steps)
         one = torch.tensor(1-self.hard_tper_weight, device=self._device, requires_grad=False)
         zero = torch.tensor(self.hard_tper_weight, device=self._device, requires_grad=False)
-        cond = steps < med if self.use_backward_timestep else steps < med
+        cond = steps < med if self.use_backward_timestep else steps > med
             
         weight = torch.where(cond, one, zero)
         return weight
