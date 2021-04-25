@@ -17,7 +17,7 @@ def run(args):
         config['Agent']['num_steps'] = args.num_steps
 
     # Create environments.
-    if "v2" in args.env_id:
+    if "SG" in args.env_id:
         from discor.env_SG import make_env_SG
         env = make_env_SG(args.env_id, args.seed)
         test_env = make_env_SG(args.env_id, args.seed)
