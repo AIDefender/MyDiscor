@@ -13,7 +13,8 @@ def assert_env(env):
 
 METAWORLD_TASKS = (
     'hammer-v1', 'stick-push-v1', 'push-wall-v1',
-    'stick-pull-v1', 'dial-turn-v1', 'peg-insert-side-v1')
+    'stick-pull-v1', 'dial-turn-v1', 'peg-insert-side-v1',
+    'door-open-v1', 'drawer-open-v1', 'button-press-v1')
 
 for task in METAWORLD_TASKS:
     register(
