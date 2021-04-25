@@ -20,7 +20,7 @@ class DisCor(SAC):
                  tau_init=10.0, target_update_coef=0.005, lfiw=False, tau_scale=1,
                  hard_tper_weight=0.4, log_interval=10, seed=0, discor=False, 
                  tper=False, log_dir=None, env=None, eval_tper=False,
-                 use_backward_timestep=False):
+                 use_backward_timestep=False, reweigh_new_traj=False):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
             entropy_lr, policy_hidden_units, q_hidden_units,
@@ -74,6 +74,7 @@ class DisCor(SAC):
         if self.tper:
             self.hard_tper_weight = hard_tper_weight
             self.use_backward_timestep = use_backward_timestep
+            self.reweigh_new_traj = reweigh_new_traj
 
         self.Qs = 2
 
@@ -150,7 +151,8 @@ class DisCor(SAC):
         # Calculate weights for temporal priority
         if self.tper:
             steps = train_batch["steps"]
-            tper_weights = self.calc_tper_weights(steps)
+            done_cnts = train_batch["done_cnts"] if self.reweigh_new_traj else None
+            tper_weights = self.calc_tper_weights(steps, done_cnts)
             weights1 *= tper_weights
             weights2 *= tper_weights
 
@@ -185,7 +187,7 @@ class DisCor(SAC):
                     'loss/prob_loss', prob_loss.detach().item(),
                     self._learning_steps)
 
-    def calc_tper_weights(self, steps):
+    def calc_tper_weights(self, steps, done_cnts):
         assert self.hard_tper_weight <= 0.5
         med = torch.median(steps)
         one = torch.tensor(1-self.hard_tper_weight, device=self._device, requires_grad=False)
