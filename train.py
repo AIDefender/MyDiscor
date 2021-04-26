@@ -4,7 +4,6 @@ import argparse
 from datetime import datetime
 import torch
 
-from discor.env import make_env
 from discor.algorithm import SAC, DisCor, DQN
 from discor.agent import Agent
 import gym
@@ -18,8 +17,14 @@ def run(args):
         config['Agent']['num_steps'] = args.num_steps
 
     # Create environments.
-    env = make_env(args.env_id)
-    test_env = make_env(args.env_id)
+    if "SG" in args.env_id:
+        from discor.env_SG import make_env_SG
+        env = make_env_SG(args.env_id.split("_")[0], args.seed)
+        test_env = make_env_SG(args.env_id.split("_")[0], args.seed)
+    else:
+        from discor.env import make_env
+        env = make_env(args.env_id)
+        test_env = make_env(args.env_id)
 
     # Device to use.
     device = torch.device(

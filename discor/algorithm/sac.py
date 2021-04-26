@@ -168,17 +168,22 @@ class SAC(Algorithm):
         if self._eval_tper and self._learning_steps % self._eval_tper_interval == 0:
             steps = batch["steps"]
             sim_states = batch["sim_states"]
-            self.eval_Q(states[:128], actions[:128], steps[:128], sim_states[:128], curr_qs1[:128], err_preds[:128] if err_preds is not None else None)
+            done_cnts = batch["done_cnts"]
+            self.eval_Q(states[:128], actions[:128], steps[:128], sim_states[:128], curr_qs1[:128], 
+                        done_cnts[:128],
+                        err_preds[:128] if err_preds is not None else None
+            )
 
         # Return their values for DisCor algorithm.
         return curr_qs1.detach(), curr_qs2.detach(), target_qs
 
-    def eval_Q(self, states, actions, steps, sim_states, curr_qs, err_preds=None):
+    def eval_Q(self, states, actions, steps, sim_states, curr_qs, done_cnts, err_preds=None):
 
         Qpi = self.get_real_Q(states, actions, steps, sim_states)
         assert curr_qs.shape == Qpi.shape
         np.savetxt(os.path.join(self._stats_dir, "Qpi_timestep%d.txt"%self._learning_steps), Qpi.detach().cpu().numpy())
         np.savetxt(os.path.join(self._stats_dir, "step_timestep%d.txt"%self._learning_steps), steps.detach().cpu().numpy())
+        np.savetxt(os.path.join(self._stats_dir, "done_cnt_timestep%d.txt"%self._learning_steps), done_cnts.detach().cpu().numpy())
         np.savetxt(os.path.join(self._stats_dir, "Qvalue_timestep%d.txt"%self._learning_steps), curr_qs.detach().cpu().numpy())
         if err_preds is not None:
             np.savetxt(os.path.join(self._stats_dir, "Error_pred_timestep%d.txt"%self._learning_steps), err_preds.detach().cpu().numpy())

@@ -95,17 +95,17 @@ class ReplayBuffer:
 
             if self._nstep_buffer.is_full():
                 state, action, reward = self._nstep_buffer.get()
-                self._append(state, action, reward, next_state, done)
+                self._append(state, action, reward, next_state, done, episode_done=episode_done)
 
             if done or episode_done:
                 while not self._nstep_buffer.is_empty():
                     state, action, reward = self._nstep_buffer.get()
-                    self._append(state, action, reward, next_state, done)
+                    self._append(state, action, reward, next_state, done, episode_done=episode_done)
 
         else:
             self._append(state, action, reward, next_state, done, step, sim_state)
 
-    def _append(self, state, action, reward, next_state, done, step=None, sim_state=None):
+    def _append(self, state, action, reward, next_state, done, step=None, sim_state=None, episode_done=None):
         self._states[self._p, ...] = state
         self._actions[self._p, ...] = action
         self._rewards[self._p, ...] = reward
@@ -162,19 +162,27 @@ class TemporalPrioritizedReplayBuffer(ReplayBuffer):
     def _reset(self):
         super()._reset()
         self._steps = np.empty((self._memory_size, 1), dtype=np.int64)
+        self._done_cnts = np.empty((self._memory_size, 1), dtype=np.int64)
+        self._cur_done_cnt = 0
 
-    def _append(self, state, action, reward, next_state, done, step, sim_state):
-        super()._append(state, action, reward, next_state, done, step, sim_state)
+    def _append(self, state, action, reward, next_state, done, step, sim_state=None, episode_done=None):
+        super()._append(state, action, reward, next_state, done, step, sim_state, episode_done=episode_done)
         # We can compute mod on negative number
         self._p = (self._p - 1) % self._memory_size 
         self._steps[self._p, ...] = step
+        self._done_cnts[self._p, ...] = self._cur_done_cnt
         self._p = (self._p + 1) % self._memory_size
+        if done or episode_done:
+            self._cur_done_cnt += 1
 
     def _sample_batch(self, idxes, batch_size, device):
         batch = super()._sample_batch(idxes, batch_size, device)
         steps = torch.tensor(
             self._steps[idxes], dtype=torch.int64, device=device)
+        done_cnts = torch.tensor(
+            self._done_cnts[idxes], dtype=torch.int64, device=device)
         batch.update({"steps": steps})
+        batch.update({"done_cnts": done_cnts})
         return batch
 
 class BackTimeBuffer(TemporalPrioritizedReplayBuffer):
