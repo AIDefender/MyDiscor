@@ -60,12 +60,12 @@ def run(args):
             discor=args.discor,
             lfiw=args.lfiw,
             tper=args.tper,
-            horizon = horizon,
             hard_tper_weight=args.hard_weight,
             use_backward_timestep=args.bk_step,
             log_dir=log_dir,
             env=test_env,
             eval_tper = args.eval_tper,
+            reweigh_type = args.reweigh_type,
             **config['SAC'], **config['DisCor'])
     elif args.algo == 'sac':
         # SAC algorithm.
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--save_interval', type=int, default=0) # 0 means only saving last and best model
     parser.add_argument('--tau_scale', type=float, default=1.0)
-    parser.add_argument('--reweigh-scheme', choices=['soft', 'hard'], default='hard')
+    parser.add_argument('--reweigh_type', choices=['linear', 'hard'], default='hard')
     parser.add_argument('--hard_weight', type=float, default=0.4)
     args = parser.parse_args()
     run(args)
