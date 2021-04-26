@@ -16,11 +16,12 @@ class DisCor(SAC):
                  policy_lr=0.0003, q_lr=0.0003, entropy_lr=0.0003,
                  error_lr=0.0003, policy_hidden_units=[256, 256],
                  q_hidden_units=[256, 256], error_hidden_units=[256, 256, 256],
-                 prob_hidden_units=[128, 128], prob_temperature=7.5, horizon=None,
+                 prob_hidden_units=[128, 128], prob_temperature=7.5, 
                  tau_init=10.0, target_update_coef=0.005, lfiw=False, tau_scale=1,
                  hard_tper_weight=0.4, log_interval=10, seed=0, discor=False, 
                  tper=False, log_dir=None, env=None, eval_tper=False,
-                 use_backward_timestep=False, reweigh_new_traj=False):
+                 use_backward_timestep=False, reweigh_type="hard",
+                 reweigh_new_traj=False):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
             entropy_lr, policy_hidden_units, q_hidden_units,
@@ -75,6 +76,7 @@ class DisCor(SAC):
             self.hard_tper_weight = hard_tper_weight
             self.use_backward_timestep = use_backward_timestep
             self.reweigh_new_traj = reweigh_new_traj
+            self.reweigh_type = reweigh_type
 
         self.Qs = 2
 
@@ -188,13 +190,23 @@ class DisCor(SAC):
                     self._learning_steps)
 
     def calc_tper_weights(self, steps, done_cnts):
-        assert self.hard_tper_weight <= 0.5
-        med = torch.median(steps)
-        one = torch.tensor(1-self.hard_tper_weight, device=self._device, requires_grad=False)
-        zero = torch.tensor(self.hard_tper_weight, device=self._device, requires_grad=False)
-        cond = steps < med if self.use_backward_timestep else steps > med
-            
-        weight = torch.where(cond, one, zero)
+        if self.reweigh_type == 'hard':
+            assert self.hard_tper_weight <= 0.5
+            med = torch.median(steps)
+            one = torch.tensor(1-self.hard_tper_weight, device=self._device, requires_grad=False)
+            zero = torch.tensor(self.hard_tper_weight, device=self._device, requires_grad=False)
+            cond = steps < med if self.use_backward_timestep else steps > med
+                
+            weight = torch.where(cond, one, zero)
+        elif self.reweigh_type == 'linear':
+            high, low = torch.tensor((1.5, 0.6)).to(device=self._device)
+            k, b = torch.tensor((3., -0.3)).to(device=self._device)
+            rel_step = steps.to(dtype=torch.float32) / torch.max(steps)
+            if self.use_backward_timestep:
+                # convert bk step to forward 
+                rel_step = 1 - rel_step
+            weight = torch.max(torch.min(k*rel_step+b, high), low)
+            weight = weight / torch.sum(weight) * steps.shape[0]
         return weight
 
     def calc_importance_weights(self, next_states, dones):
