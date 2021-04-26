@@ -11,7 +11,7 @@ class Agent:
 
     def __init__(self, env, test_env, algo: Algorithm, log_dir, device, num_steps=3000000,
                  batch_size=256, memory_size=1000000, fast_memory_size=None,
-                 update_interval=1, start_steps=10000, log_interval=10, horizon=None, temperature=None,
+                 update_interval=1, start_steps=10000, log_interval=10, use_tper=False,
                  eval_interval=5000, num_eval_episodes=5, seed=0, use_backward_steps=False,
                  save_model_interval=0, eval_tper=False,
                  ):
@@ -26,10 +26,10 @@ class Agent:
         # Algorithm.
         self._algo = algo
 
-        self.tper = True if horizon else False
+        self.tper = True if use_tper else False
 
         # Replay buffer with n-step return.
-        buffer = TemporalPrioritizedReplayBuffer if horizon else ReplayBuffer
+        buffer = TemporalPrioritizedReplayBuffer if use_tper else ReplayBuffer
         if use_backward_steps:
             buffer = BackTimeBuffer
         self._replay_buffer = buffer(
@@ -37,8 +37,6 @@ class Agent:
             state_shape=self._env.observation_space.shape,
             action_shape=self._env.action_space.shape,
             gamma=self._algo.gamma, nstep=self._algo.nstep,
-            horizon=horizon, temperature=temperature,
-            backward=use_backward_steps,
             arbi_reset=eval_tper)
 
         if hasattr(algo, "lfiw") and algo.lfiw:
@@ -50,7 +48,7 @@ class Agent:
                 state_shape=self._env.observation_space.shape,
                 action_shape=self._env.action_space.shape,
                 gamma=self._algo.gamma, nstep=self._algo.nstep,
-                horizon=horizon, temperature=temperature)
+                )
         else:
             self.lfiw = False
 

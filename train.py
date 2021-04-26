@@ -23,8 +23,8 @@ def run(args):
         test_env = make_env_SG(args.env_id.split("_")[0], args.seed)
     else:
         from discor.env import make_env
-        env = make_env(args.env_id)
-        test_env = make_env(args.env_id)
+        env = make_env(args.env_id, args.seed)
+        test_env = make_env(args.env_id, args.seed)
 
     # Device to use.
     device = torch.device(
@@ -84,7 +84,7 @@ def run(args):
         raise Exception('You need to set "--algo sac" or "--algo discor".')
 
     agent = Agent(
-        env=env, test_env=test_env, algo=algo, log_dir=log_dir, horizon=horizon, temperature=args.tper_t,
+        env=env, test_env=test_env, algo=algo, log_dir=log_dir, use_tper=args.tper,
         device=device, seed=args.seed, use_backward_steps=args.bk_step, save_model_interval=args.save_interval,
         eval_tper=args.eval_tper,
          **config['Agent'])
@@ -104,13 +104,11 @@ if __name__ == '__main__':
     parser.add_argument('--lfiw', action='store_true')
     parser.add_argument('--tper', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
     parser.add_argument('--eval_tper', action='store_true')
-    parser.add_argument('--eval_tper_interval', type=int, default=1e3)
     parser.add_argument('--bk_step', action='store_true')
-    parser.add_argument('--dyna_h', action='store_true') # whether to determine horizon length dynamically
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--save_interval', type=int, default=0) # 0 means only saving last and best model
     parser.add_argument('--tau_scale', type=float, default=1.0)
+    parser.add_argument('--reweigh-scheme', choices=['soft', 'hard'], default='hard')
     parser.add_argument('--hard_weight', type=float, default=0.4)
-    parser.add_argument('--tper_t', type=int, default=3e4)
     args = parser.parse_args()
     run(args)

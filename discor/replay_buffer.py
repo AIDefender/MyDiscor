@@ -156,7 +156,7 @@ class ReplayBuffer:
 class TemporalPrioritizedReplayBuffer(ReplayBuffer):
 
     def __init__(self, memory_size, state_shape, action_shape, gamma=0.99, nstep=1,
-                 horizon = 1000, temperature=None, backward=False, arbi_reset=False):
+                 arbi_reset=False):
         super().__init__(memory_size, state_shape, action_shape, gamma, nstep, arbi_reset=arbi_reset)
 
     def _reset(self):
