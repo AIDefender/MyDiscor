@@ -19,8 +19,8 @@ def run(args):
     # Create environments.
     if "SG" in args.env_id:
         from discor.env_SG import make_env_SG
-        env = make_env_SG(args.env_id, args.seed)
-        test_env = make_env_SG(args.env_id, args.seed)
+        env = make_env_SG(args.env_id.split("_")[0], args.seed)
+        test_env = make_env_SG(args.env_id.split("_")[0], args.seed)
     else:
         from discor.env import make_env
         env = make_env(args.env_id)
