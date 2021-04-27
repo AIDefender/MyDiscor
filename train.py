@@ -47,9 +47,10 @@ def run(args):
         state_dim = env.observation_space.shape[0]
         print("==========state dim: %d========"%state_dim)
 
-    horizon = env._max_episode_steps
-    print("=========horizon:%d========="%horizon)
-
+    reweigh_hyper = {
+        "linear": args.linear_hp,
+        "adaptive_linear": args.adaptive_scheme,
+    }
     if args.algo == 'discor':
         # Discor algorithm.
         algo = DisCor(
@@ -66,6 +67,7 @@ def run(args):
             env=test_env,
             eval_tper = args.eval_tper,
             reweigh_type = args.reweigh_type,
+            reweigh_hyper = reweigh_hyper,
             **config['SAC'], **config['DisCor'])
     elif args.algo == 'sac':
         # SAC algorithm.
@@ -108,7 +110,11 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--save_interval', type=int, default=0) # 0 means only saving last and best model
     parser.add_argument('--tau_scale', type=float, default=1.0)
-    parser.add_argument('--reweigh_type', choices=['linear', 'hard'], default='hard')
+    parser.add_argument('--reweigh_type', choices=['linear', 'adaptive_linear', 'hard'], default='hard')
+    # hyperparameters for low, high, k, b
+    parser.add_argument("--linear_hp", type=float, nargs='*', default=[0.6, 1.5, 3., -0.3])
+    # hyperparameters for low_start, low_end, high_start, high_end, timestep_start, timestep_end
+    parser.add_argument('--adaptive_scheme', type=float, nargs="*", default=[0.4, 0.8, 1.6, 1.2, 0, 1e6])
     parser.add_argument('--hard_weight', type=float, default=0.4)
     args = parser.parse_args()
     run(args)

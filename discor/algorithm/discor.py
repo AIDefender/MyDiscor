@@ -8,7 +8,7 @@ from .sac import SAC
 from discor.network import TwinnedStateActionFunction
 from discor.utils import disable_gradients, soft_update, update_params
 from .rlkit.torch.networks import FlattenMlp
-
+import json
 
 class DisCor(SAC):
 
@@ -21,7 +21,7 @@ class DisCor(SAC):
                  hard_tper_weight=0.4, log_interval=10, seed=0, discor=False, 
                  tper=False, log_dir=None, env=None, eval_tper=False,
                  use_backward_timestep=False, reweigh_type="hard",
-                 reweigh_new_traj=False):
+                 reweigh_hyper=None):
         super().__init__(
             state_dim, action_dim, device, gamma, nstep, policy_lr, q_lr,
             entropy_lr, policy_hidden_units, q_hidden_units,
@@ -75,10 +75,17 @@ class DisCor(SAC):
         if self.tper:
             self.hard_tper_weight = hard_tper_weight
             self.use_backward_timestep = use_backward_timestep
-            self.reweigh_new_traj = reweigh_new_traj
             self.reweigh_type = reweigh_type
+            self.reweigh_hyper = reweigh_hyper
 
         self.Qs = 2
+
+        self._param_dir = os.path.join(log_dir, 'param')
+        if not os.path.exists(self._param_dir):
+            os.makedirs(self._param_dir)
+        with open(os.path.join(self._param_dir, "discor_params.txt"), 'w') as f:
+            for key, value in zip(locals().keys(), locals().values()):
+                print(key, ":", value, file=f)
 
     def update_target_networks(self):
         super().update_target_networks()
@@ -153,7 +160,7 @@ class DisCor(SAC):
         # Calculate weights for temporal priority
         if self.tper:
             steps = train_batch["steps"]
-            done_cnts = train_batch["done_cnts"] if self.reweigh_new_traj else None
+            done_cnts = train_batch["done_cnts"]
             tper_weights = self.calc_tper_weights(steps, done_cnts)
             weights1 *= tper_weights
             weights2 *= tper_weights
@@ -190,23 +197,40 @@ class DisCor(SAC):
                     self._learning_steps)
 
     def calc_tper_weights(self, steps, done_cnts):
+        rel_step = steps.to(dtype=torch.float32) / torch.max(steps)
+        if self.use_backward_timestep:
+            # convert bk step to forward 
+            rel_step = 1 - rel_step
+
         if self.reweigh_type == 'hard':
             assert self.hard_tper_weight <= 0.5
             med = torch.median(steps)
             one = torch.tensor(1-self.hard_tper_weight, device=self._device, requires_grad=False)
             zero = torch.tensor(self.hard_tper_weight, device=self._device, requires_grad=False)
             cond = steps < med if self.use_backward_timestep else steps > med
-                
             weight = torch.where(cond, one, zero)
         elif self.reweigh_type == 'linear':
-            high, low = torch.tensor((1.5, 0.6)).to(device=self._device)
-            k, b = torch.tensor((3., -0.3)).to(device=self._device)
-            rel_step = steps.to(dtype=torch.float32) / torch.max(steps)
-            if self.use_backward_timestep:
-                # convert bk step to forward 
-                rel_step = 1 - rel_step
-            weight = torch.max(torch.min(k*rel_step+b, high), low)
-            weight = weight / torch.sum(weight) * steps.shape[0]
+            l, h, k, b = \
+                [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["linear"]]
+            weight = self._calc_linear_weight(rel_step, l, h, k, b)
+        elif self.reweigh_type == 'adaptive_linear':
+            _, _, k, b = \
+                [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["linear"]]
+            low_s, low_e, high_s, high_e, t_s, t_e = \
+                [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["adaptive_linear"]]
+            cur_low = torch.clamp(low_s + (low_e - low_s)/(t_e - t_s)*(self._learning_steps - t_s), low_s, low_e)
+            cur_high = torch.clamp(high_s + (high_e - high_s)/(t_e - t_s)*(self._learning_steps - t_s), high_e, high_s)
+            print(cur_low, cur_high)
+            weight = self._calc_linear_weight(rel_step, cur_low, cur_high, k, b)
+        return weight
+
+    def _calc_linear_weight(self, rel_step, l, h, k, b):
+        assert torch.max(rel_step) <= 1
+        assert torch.min(rel_step) >= 0
+        # weight = torch.max(torch.min(k*rel_step+b, h), l)
+        weight = torch.clamp(k*rel_step+b, l, h)
+        weight = weight / torch.sum(weight) * rel_step.shape[0]
+
         return weight
 
     def calc_importance_weights(self, next_states, dones):
