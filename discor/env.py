@@ -4,28 +4,22 @@ from metaworld.envs.mujoco.env_dict import ALL_V1_ENVIRONMENTS
 
 gym.logger.set_level(40)
 
-
 def assert_env(env):
     assert isinstance(env.observation_space, gym.spaces.Box)
     assert isinstance(env.action_space, gym.spaces.Box)
     assert hasattr(env, '_max_episode_steps')
 
-
-METAWORLD_TASKS = (
-    'hammer-v1', 'stick-push-v1', 'push-wall-v1',
-    'stick-pull-v1', 'dial-turn-v1', 'peg-insert-side-v1',
-    'door-open-v1', 'drawer-open-v1', 'button-press-v1')
-
-for task in METAWORLD_TASKS:
-    register(
-        id=task,
-        entry_point=ALL_V1_ENVIRONMENTS[task],
-        max_episode_steps=150)
-    assert_env(gym.make(task))
-
-
 def make_env(env_id, seed):
-    env = gym.make(env_id)
+    try:
+        env = gym.make(env_id)
+    except gym.error.UnregisteredEnv:
+        register(
+            id=env_id,
+            entry_point=ALL_V1_ENVIRONMENTS[env_id],
+            max_episode_steps=150)
+        print("Registered env", env_id)
+        env = gym.make(env_id)
+        assert_env(env)
     env.seed(seed)
-    setattr(env, 'is_metaworld', env_id in METAWORLD_TASKS)
+    setattr(env, 'is_metaworld', env_id in ALL_V1_ENVIRONMENTS.keys())
     return env
