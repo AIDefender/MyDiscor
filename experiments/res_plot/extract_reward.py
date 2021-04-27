@@ -5,10 +5,10 @@ import tensorflow.compat.v1 as tf
 import numpy as np
 sns.set_style()
 
-EXP = "Hopper-v2"
+EXP = "Ant-v2"
 # AlGOS = ["lfiw_sac", "sac"]
 # AlGOS = ["discor_full", "lfiw_tper_full"]
-AlGOS = ["discor_full"]
+AlGOS = ["tper_linear"]
 root_path = os.path.join("../../logs/"+EXP)
 
 def get_rew_from_path(path):
@@ -26,7 +26,7 @@ for algo in AlGOS:
     algo_paths.update({algo:[]})
 
 for dir in os.listdir(root_path):
-    if "full" in dir and "txt" not in dir:
+    if "full" in dir and "txt" not in dir or "plt" in dir:
         for algo in AlGOS:
             if dir.startswith(algo):
                 algo_paths[algo].append(dir)
