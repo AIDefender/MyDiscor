@@ -220,7 +220,6 @@ class DisCor(SAC):
                 [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["adaptive_linear"]]
             cur_low = torch.clamp(low_s + (low_e - low_s)/(t_e - t_s)*(self._learning_steps - t_s), low_s, low_e)
             cur_high = torch.clamp(high_s + (high_e - high_s)/(t_e - t_s)*(self._learning_steps - t_s), high_e, high_s)
-            print(cur_low, cur_high)
             weight = self._calc_linear_weight(rel_step, cur_low, cur_high, k, b)
         return weight
 

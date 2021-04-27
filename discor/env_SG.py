@@ -16,6 +16,7 @@ task_names = (
     'stick-pull-v2', 'dial-turn-v2', 'peg-insert-side-v2',
     'door-open-v2', 'drawer-open-v2', 'button-press-v2')
 
+# Single observable Goal
 METAWORLD_TASKS = [i+"-goal-observable" for i in task_names]
 
 for task, name in zip(METAWORLD_TASKS, task_names):
