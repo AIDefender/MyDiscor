@@ -77,6 +77,12 @@ class DisCor(SAC):
             self.use_backward_timestep = use_backward_timestep
             self.reweigh_type = reweigh_type
             self.reweigh_hyper = reweigh_hyper
+            if "linear" in self.reweigh_type:
+                self.l, self.h, self.k, self.b = \
+                    [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["linear"]]
+            if self.reweigh_type in ["adaptive_linear", "done_cnt_linear"]:
+                self.low_l, self.low_h, self.high_l, self.high_h, self.t_s, self.t_e = \
+                    [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["adaptive_linear"]]
 
         self.Qs = 2
 
@@ -210,24 +216,41 @@ class DisCor(SAC):
             cond = steps < med if self.use_backward_timestep else steps > med
             weight = torch.where(cond, one, zero)
         elif self.reweigh_type == 'linear':
-            l, h, k, b = \
-                [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["linear"]]
-            weight = self._calc_linear_weight(rel_step, l, h, k, b)
+            weight = self._calc_linear_weight(rel_step, self.l, self.h, self.k, self.b)
         elif self.reweigh_type == 'adaptive_linear':
-            _, _, k, b = \
-                [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["linear"]]
-            low_s, low_e, high_s, high_e, t_s, t_e = \
-                [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["adaptive_linear"]]
-            cur_low = torch.clamp(low_s + (low_e - low_s)/(t_e - t_s)*(self._learning_steps - t_s), low_s, low_e)
-            cur_high = torch.clamp(high_s + (high_e - high_s)/(t_e - t_s)*(self._learning_steps - t_s), high_e, high_s)
-            weight = self._calc_linear_weight(rel_step, cur_low, cur_high, k, b)
+            cur_low = torch.clamp(
+                self.low_l + (self.low_h - self.low_l)/(self.t_e - self.t_s)*(self._learning_steps - self.t_s), 
+                self.low_l, 
+                self.low_h
+            )
+            cur_high = torch.clamp(
+                self.high_h + (self.high_l - self.high_h)/(self.t_e - self.t_s)*(self._learning_steps - self.t_s), 
+                self.high_l, 
+                self.high_h
+            )
+            weight = self._calc_linear_weight(rel_step, cur_low, cur_high, self.k, self.b)
+        elif self.reweigh_type == 'done_cnt_linear':
+            rel_done_cnt = done_cnts.to(dtype=torch.float32) / torch.max(done_cnts)
+            # The tajectory is newer with larger done counts, which can be understood as fewer learning steps
+            pseudo_step = 1 - rel_done_cnt
+            cur_low = torch.clamp(
+                self.low_l + (self.low_h - self.low_l) * pseudo_step,
+                self.low_l, 
+                self.low_h
+            )
+            cur_high = torch.clamp(
+                self.high_h + (self.high_l - self.high_h) * pseudo_step,
+                self.high_l, 
+                self.high_h
+            )
+            weight = self._calc_linear_weight(rel_step, cur_low, cur_high, self.k, self.b)
         return weight
 
     def _calc_linear_weight(self, rel_step, l, h, k, b):
         assert torch.max(rel_step) <= 1
         assert torch.min(rel_step) >= 0
-        # weight = torch.max(torch.min(k*rel_step+b, h), l)
-        weight = torch.clamp(k*rel_step+b, l, h)
+        weight = torch.max(torch.min(k*rel_step+b, h), l)
+        # weight = torch.clamp(k*rel_step+b, l, h)
         weight = weight / torch.sum(weight) * rel_step.shape[0]
 
         return weight
