@@ -50,6 +50,7 @@ def run(args):
     reweigh_hyper = {
         "linear": args.linear_hp,
         "adaptive_linear": args.adaptive_scheme,
+        "exp": args.exp_hp,
     }
     if args.algo == 'discor':
         # Discor algorithm.
@@ -111,13 +112,17 @@ if __name__ == '__main__':
     parser.add_argument('--save_interval', type=int, default=0) # 0 means only saving last and best model
     parser.add_argument('--tau_scale', type=float, default=1.0)
     parser.add_argument('--reweigh_type', 
-                        choices=['linear', 'adaptive_linear', 'done_cnt_linear', 'hard'], 
+                        choices=['linear', 'adaptive_linear', 'done_cnt_linear', 
+                                 'exp', 'adaptive_exp',
+                                 'hard'], 
                         default='hard')
     # hyperparameters for low, high, k, b
     parser.add_argument("--linear_hp", type=float, nargs='*', default=[0.6, 1.5, 3., -0.3])
     # hyperparameters for low for lower weight, high for lower weight, 
     # low for higher_weight, high for higher weight, timestep_start, timestep_end
     parser.add_argument('--adaptive_scheme', type=float, nargs="*", default=[0.4, 0.8, 1.2, 1.6, 0, 1e6])
+    # hyperparameters for exponential reweight: k, gamma
+    parser.add_argument('--exp-hp', type=float, nargs='*', default=[1., 0.996])
     parser.add_argument('--hard_weight', type=float, default=0.4)
     args = parser.parse_args()
     run(args)

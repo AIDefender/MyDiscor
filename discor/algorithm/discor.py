@@ -77,13 +77,13 @@ class DisCor(SAC):
             self.use_backward_timestep = use_backward_timestep
             self.reweigh_type = reweigh_type
             self.reweigh_hyper = reweigh_hyper
-            if "linear" in self.reweigh_type:
-                self.l, self.h, self.k, self.b = \
-                    [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["linear"]]
+            self.l, self.h, self.k, self.b = \
+                [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["linear"]]
             if self.reweigh_type in ["adaptive_linear", "done_cnt_linear"]:
                 self.low_l, self.low_h, self.high_l, self.high_h, self.t_s, self.t_e = \
                     [torch.tensor(i).to(device=self._device) for i in self.reweigh_hyper["adaptive_linear"]]
-
+            if "exp" in self.reweigh_type:
+                self.exp_k, self.exp_gamma = self.reweigh_hyper["exp"]
         self.Qs = 2
 
         self._param_dir = os.path.join(log_dir, 'param')
@@ -203,7 +203,8 @@ class DisCor(SAC):
                     self._learning_steps)
 
     def calc_tper_weights(self, steps, done_cnts):
-        rel_step = steps.to(dtype=torch.float32) / torch.max(steps)
+        steps = steps.to(dtype=torch.float32) 
+        rel_step = steps / torch.max(steps)
         if self.use_backward_timestep:
             # convert bk step to forward 
             rel_step = 1 - rel_step
@@ -244,6 +245,13 @@ class DisCor(SAC):
                 self.high_h
             )
             weight = self._calc_linear_weight(rel_step, cur_low, cur_high, self.k, self.b)
+        elif self.reweigh_type == 'exp':
+            # compute exp weight with exp(k*gamma^bk_step)
+            if not self.use_backward_timestep:
+                # compute proxy backward step
+                steps = torch.max(steps) - steps
+            weight = torch.exp(self.exp_k * self.exp_gamma ** steps) / (2.71828 - 1)
+            weight = weight / torch.sum(weight) * steps.shape[0]
         return weight
 
     def _calc_linear_weight(self, rel_step, l, h, k, b):
