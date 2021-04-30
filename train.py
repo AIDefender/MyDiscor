@@ -107,7 +107,7 @@ if __name__ == '__main__':
     parser.add_argument('--lfiw', action='store_true')
     parser.add_argument('--tper', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
     parser.add_argument('--eval_tper', action='store_true')
-    parser.add_argument('--bk_step', action='store_true')
+    parser.add_argument('--bk_step', action='store_false')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--save_interval', type=int, default=0) # 0 means only saving last and best model
     parser.add_argument('--tau_scale', type=float, default=1.0)
