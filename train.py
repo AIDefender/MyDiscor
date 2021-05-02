@@ -28,7 +28,7 @@ def run(args):
 
     # Device to use.
     device = torch.device(
-        "cuda" if args.cuda and torch.cuda.is_available() else "cpu")
+        "cuda" if not args.no_cuda and torch.cuda.is_available() else "cpu")
 
     # Specify the directory to log.
     time = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -103,6 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='discor')
     parser.add_argument('--algo', choices=['sac', 'discor'], default='discor')
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--discor', action='store_true')
     parser.add_argument('--lfiw', action='store_true')
     parser.add_argument('--tper', action='store_true') # Temporal PER. Reweight according to length to done in the trajectory.
