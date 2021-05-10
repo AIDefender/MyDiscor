@@ -15,13 +15,12 @@ def get_rew_from_path(path):
                 rewards.append(value.simple_value)
     return rewards
 
-# AlGOS = ["lfiw_full", "lfiw_discor_full"]
-# AlGOS = ["lfiw_full", "discor_lfiw_full"]
-AlGOS = ["discor_full", "lfiw_full", "sac_full", "discor_lfiw_full"]
-# AlGOS = ["discor_full"]
+AlGOS = ["discor_lfiw_full"]
+# AlGOS = ["discor_full", "lfiw_full", "sac_full", "discor_lfiw_full"]
+# AlGOS = ["lfiw_tper_linear"]
 
 # for EXP in ["hammer-v1", "push-wall-v1", "dial-turn-v1"]:
-for EXP in ["door-open-v1"]:
+for EXP in ["faucet-close-v1"]:
 # for EXP in ["button-press-v1", ]:
     # root_path = os.path.join("../../logs/"+EXP)
     root_path = os.path.join("../../../data/discor/logs/"+EXP)
@@ -30,10 +29,11 @@ for EXP in ["door-open-v1"]:
         algo_paths.update({algo:[]})
 
     for dir in os.listdir(root_path):
-        if "full" in dir and "txt" not in dir:
+        if ("full" in dir or "linear" in dir) and "txt" not in dir:
             for algo in AlGOS:
                 if dir.startswith(algo):
                     algo_paths[algo].append(dir)
+    print(EXP)
     print(algo_paths)
     for algo in AlGOS:
         paths = algo_paths[algo]
