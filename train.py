@@ -21,6 +21,10 @@ def run(args):
         from discor.env_SG import make_env_SG
         env = make_env_SG(args.env_id.split("_")[0], args.seed)
         test_env = make_env_SG(args.env_id.split("_")[0], args.seed)
+    elif args.dmc:
+        from discor.env import make_dmc_env
+        env = make_dmc_env(args.domain_name, args.task_name, args.seed)
+        test_env = make_dmc_env(args.domain_name, args.task_name, args.seed)
     else:
         from discor.env import make_env
         env = make_env(args.env_id, args.seed)
@@ -125,5 +129,8 @@ if __name__ == '__main__':
     # hyperparameters for exponential reweight: k, gamma
     parser.add_argument('--exp-hp', type=float, nargs='*', default=[1., 0.996])
     parser.add_argument('--hard_weight', type=float, default=0.4)
+    parser.add_argument('--dmc', action='store_true')
+    parser.add_argument('--domain_name', type=str)
+    parser.add_argument('--task_name', type=str)
     args = parser.parse_args()
     run(args)

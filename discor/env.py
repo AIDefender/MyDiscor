@@ -1,6 +1,7 @@
 import gym
 from gym.envs.registration import register
 from metaworld.envs.mujoco.env_dict import ALL_V1_ENVIRONMENTS
+import dmc2gym
 
 gym.logger.set_level(40)
 
@@ -22,4 +23,9 @@ def make_env(env_id, seed):
         assert_env(env)
     env.seed(seed)
     setattr(env, 'is_metaworld', env_id in ALL_V1_ENVIRONMENTS.keys())
+    return env
+
+def make_dmc_env(domain_name, task_name, seed=0):
+    env = dmc2gym.make(domain_name=domain_name, task_name=task_name, seed=seed)
+    setattr(env, 'is_metaworld', False)
     return env
