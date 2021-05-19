@@ -96,4 +96,5 @@ for EXP, horizon in zip(ENVS, horizons):
 
 length=15
 fig.set_size_inches(length*3.5, length)
-fig.savefig("reward-four-1.png")
+fig.savefig("reward-four-1.png", bbox_inches = 'tight',
+    pad_inches = 0.1)

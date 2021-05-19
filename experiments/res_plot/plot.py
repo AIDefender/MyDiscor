@@ -3,28 +3,40 @@ import seaborn as sns
 import os
 import numpy as np
 import pandas as pd
+
 sns.set()
 sns.set_context('paper', font_scale=1.5)
 
-EXP = "Hopper-v2"
-# AlGOS = ["sac_full", "discor_full", "lfiw_full", "discor_lfiw_full"]
-AlGOS = ["sac_full", "discor_full", "lfiw_tper_linear_k10.0", 'discor_lfiw_full']
-# AlGOS = ["sac_full", "lfiw_full", "lfiw_tper_linear"]
-# AlGOS = ["discor_lfiw_full", "lfiw_full", "lfiw_tper_adapt-linear"]
+ours_name = "lfiw_tper_adapt_linear"
+EXP = "Ant-v2-plot"
+# paper reward
+AlGOS = ["sac_full", "discor_full", "discor_lfiw_full", ours_name,]
+# paper ablation
+# AlGOS = ["sac_full", "lfiw_full", "tper_linear", ours_name]
+# AlGOS = ["sac_full", "discor_full", ours_name]
+
+# paper reward
 colors = {
+    'sac_full': 'blue',
     "discor_full": 'green',
     "discor_lfiw_full": 'black',
-    "lfiw_full": 'yellow',
-    'sac_full': 'blue',
-    # 'lfiw_tper_adapt-linear': 'red',
-    'lfiw_tper_linear_k10.0': 'red',
+    "lfiw_full": 'black',
+    ours_name: 'red',
 }
+# paper ablation
+# colors = {
+    # 'sac_full': 'blue',
+    # "lfiw_full": 'green',
+    # "tper_linear": 'black',
+    # ours_name: 'red',
+# }
 labels = {
-    "discor_lfiw_full": "ME-Discor",
+    "discor_lfiw_full": "RM-Discor",
     "discor_full": "Discor",
-    'lfiw_full': "lfiw",
+    'lfiw_full': "Only On-policy Reweight",
+    'tper_linear': "Only Step-based Reweight",
     'sac_full': 'SAC',
-    'lfiw_tper_linear_k10.0': 'ME-TCE'
+    ours_name: 'RM-TCE'
 }
 MAX_STEP=5e6
 ROLLING_STEP=10
@@ -32,11 +44,16 @@ ROLLING_STEP=10
 root_path = os.path.join("../../logs/"+EXP)
 
 for algo in AlGOS:
+    print(algo)
     file = os.path.join(root_path, "%s-all.txt"%algo)
     with open(file, 'r') as f:
         content = f.readlines()
         all_rewards = []
+        seed = -100
         for line in content:
+            seed += 100
+            # if seed != 300:
+                # continue
             line_data = []
             for i in line.split(" "):
                 try:
@@ -44,7 +61,7 @@ for algo in AlGOS:
                 except SyntaxError:
                     print("Warn: syntax err")
             print(len(line_data))
-            all_rewards.append(line_data[:400])
+            all_rewards.append(line_data[:399])
         all_rewards = np.array(all_rewards)
     rew_mean = np.mean(all_rewards, axis=0)
     print(rew_mean.shape)
@@ -58,10 +75,10 @@ for algo in AlGOS:
     rew_std = np.clip(rew_std, 0, 1500)
     x = x[plot_index]
     plt.plot(x, rew_mean, color=colors[algo], label=labels[algo])
-    plt.fill_between(x, rew_mean - rew_std, rew_mean + rew_std, lw = 3, color = colors[algo], alpha = 0.1)
+    plt.fill_between(x, rew_mean - rew_std, rew_mean + rew_std, color = colors[algo], alpha = 0.2)
 plt.legend()
 plt.title(EXP)
 plt.xlabel("Timestep")
 plt.ylabel("Reward")
-# plt.savefig("Ablation-%s.png"%EXP)
 plt.savefig("Reward-%s.png"%EXP)
+# plt.savefig("Ablation-%s.png"%EXP)

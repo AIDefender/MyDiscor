@@ -5,11 +5,12 @@ import tensorflow.compat.v1 as tf
 import numpy as np
 sns.set_style()
 
-EXP = "Hopper-v2"
-# AlGOS = ["lfiw_full", "sac_full", "discor_full", "lfiw_tper_linear"]
+EXP = "Ant-v2-plot"
+# AlGOS = ["lfiw", "sac", "discor", "lfiw_linear"]
+AlGOS = ["lfiw_tper_adapt_linear"]
 # AlGOS = ["lfiw", "sac", "lfiw_tper_linear"]
-# AlGOS = ["discor_full", "lfiw_tper_full"]
-AlGOS = ["lfiw_tper_linear_k10.0"]
+# AlGOS = ["discor", "lfiw_tper_full"]
+# AlGOS = ["lfiw_tper_linear_k10.0"]
 root_path = os.path.join("../../logs/"+EXP)
 
 def wrapper(gen):
