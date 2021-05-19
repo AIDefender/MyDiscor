@@ -27,7 +27,7 @@ def run(args):
         test_env = make_dmc_env(args.domain_name, args.task_name, args.seed)
     else:
         from discor.env import make_env
-        env = make_env(args.env_id, args.seed)
+        env = make_env(args.env_id, args.seed, args.reward_noise_scale)
         test_env = make_env(args.env_id, args.seed)
 
     # Device to use.
@@ -132,5 +132,6 @@ if __name__ == '__main__':
     parser.add_argument('--dmc', action='store_true')
     parser.add_argument('--domain_name', type=str)
     parser.add_argument('--task_name', type=str)
+    parser.add_argument('--reward_noise_scale', type=float, default=0)
     args = parser.parse_args()
     run(args)
