@@ -5,12 +5,16 @@ import tensorflow.compat.v1 as tf
 import numpy as np
 sns.set_style()
 
-EXP = "Ant-v2-plot"
+EXP = "Walker2d-v2"
 # AlGOS = ["lfiw", "sac", "discor", "lfiw_linear"]
-AlGOS = ["lfiw_tper_adapt_linear"]
+# AlGOS = ["lfiw_tper_adapt_linear"]
 # AlGOS = ["lfiw", "sac", "lfiw_tper_linear"]
 # AlGOS = ["discor", "lfiw_tper_full"]
 # AlGOS = ["lfiw_tper_linear_k10.0"]
+noise_scale = 1
+AlGOS = ["discor_lfiw_full_noise", "sac_full_noise"]
+# AlGOS = ["discor_lfiw_full_noise", "sac_full_noise"]
+AlGOS = ["%s%d"%(i, noise_scale) for i in AlGOS]
 root_path = os.path.join("../../logs/"+EXP)
 
 def wrapper(gen):
